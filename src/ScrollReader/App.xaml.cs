@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using ScrollReader.Native;
 using WinForms = System.Windows.Forms;
@@ -6,11 +7,11 @@ namespace ScrollReader;
 
 public partial class App : System.Windows.Application
 {
-    private const uint VK_R = 0x52;
-
     private Mutex? _instanceMutex;
     private WinForms.NotifyIcon? _trayIcon;
+    private WinForms.ToolStripMenuItem? _startMenuItem;
     private HotkeyManager? _hotkey;
+    private SettingsStore? _settings;
     private ReadingSession? _session;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -23,33 +24,74 @@ public partial class App : System.Windows.Application
         }
 
         base.OnStartup(e);
+
+        _settings = new SettingsStore();
+        _settings.Initialize();
+
         SetupTrayIcon();
 
         _hotkey = new HotkeyManager();
         _hotkey.HotkeyPressed += ToggleSession;
-        if (!_hotkey.Register(NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT, VK_R))
+        ApplyHotkey();
+
+        _settings.Changed += () =>
+        {
+            ApplyHotkey();
+            _trayIcon?.ShowBalloonTip(2000, "Scroll Reader", "設定を再読み込みしました。", WinForms.ToolTipIcon.Info);
+        };
+    }
+
+    private void ApplyHotkey()
+    {
+        var spec = _settings!.Current.Hotkey;
+        if (!HotkeyParser.TryParse(spec, out var modifiers, out var vk))
         {
             _trayIcon?.ShowBalloonTip(3000, "Scroll Reader",
-                "ホットキー Ctrl+Alt+R を登録できませんでした。他のアプリが使用中の可能性があります。",
+                $"ホットキー \"{spec}\" を解釈できません。Ctrl+Alt+R を使用します。", WinForms.ToolTipIcon.Warning);
+            spec = "Ctrl+Alt+R";
+            HotkeyParser.TryParse(spec, out modifiers, out vk);
+        }
+
+        if (!_hotkey!.Register(modifiers, vk))
+        {
+            _trayIcon?.ShowBalloonTip(3000, "Scroll Reader",
+                $"ホットキー {spec} を登録できませんでした。他のアプリが使用中の可能性があります。",
                 WinForms.ToolTipIcon.Warning);
         }
+
+        if (_startMenuItem is not null) _startMenuItem.Text = $"読書モード開始 ({spec})";
+        if (_trayIcon is not null) _trayIcon.Text = $"Scroll Reader — テキストを選択して {spec}";
     }
 
     private void SetupTrayIcon()
     {
         var menu = new WinForms.ContextMenuStrip();
-        menu.Items.Add("読書モード開始 (Ctrl+Alt+R)", null, (_, _) => ToggleSession());
+        _startMenuItem = new WinForms.ToolStripMenuItem("読書モード開始", null, (_, _) => ToggleSession());
+        menu.Items.Add(_startMenuItem);
+        menu.Items.Add("設定を開く", null, (_, _) => OpenSettingsFile());
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add("終了", null, (_, _) => ExitApp());
 
         _trayIcon = new WinForms.NotifyIcon
         {
             Icon = System.Drawing.SystemIcons.Application,
-            Text = "Scroll Reader — テキストを選択して Ctrl+Alt+R",
+            Text = "Scroll Reader",
             Visible = true,
             ContextMenuStrip = menu,
         };
         _trayIcon.DoubleClick += (_, _) => ToggleSession();
+    }
+
+    private void OpenSettingsFile()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(_settings!.FilePath) { UseShellExecute = true });
+        }
+        catch
+        {
+            Process.Start("explorer.exe", $"/select,\"{_settings!.FilePath}\"");
+        }
     }
 
     private void ToggleSession()
@@ -59,9 +101,37 @@ public partial class App : System.Windows.Application
             _session.End();
             return;
         }
-        _session = new ReadingSession();
+
+        var settings = _settings!.Current;
+        var foreground = GetForegroundProcessName();
+        if (foreground is not null && settings.IsBlocked(foreground))
+        {
+            NativeMethods.GetCursorPos(out var pt);
+            new OverlayWindow().ShowTransientMessage(
+                $"{foreground} では無効になっています", new System.Drawing.Point(pt.X, pt.Y));
+            return;
+        }
+
+        _session = new ReadingSession(settings);
         _session.Ended += () => _session = null;
         _session.Start();
+    }
+
+    private static string? GetForegroundProcessName()
+    {
+        try
+        {
+            var hwnd = NativeMethods.GetForegroundWindow();
+            if (hwnd == IntPtr.Zero) return null;
+            NativeMethods.GetWindowThreadProcessId(hwnd, out var pid);
+            if (pid == 0) return null;
+            using var process = Process.GetProcessById((int)pid);
+            return process.ProcessName;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private void ExitApp()
@@ -73,6 +143,7 @@ public partial class App : System.Windows.Application
             _trayIcon.Dispose();
         }
         _hotkey?.Dispose();
+        _settings?.Dispose();
         Shutdown();
     }
 

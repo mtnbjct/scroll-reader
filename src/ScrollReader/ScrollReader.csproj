@@ -14,4 +14,8 @@
     <Version>0.1.0</Version>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="ScrollReader.Tests" />
+  </ItemGroup>
+
 </Project>

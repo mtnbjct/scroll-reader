@@ -48,6 +48,8 @@ public partial class OverlayWindow : Window
         Reposition();
     }
 
+    public void SetFontSize(double size) => SegmentText.FontSize = size;
+
     public void SetSegment(string text, int index, int total, bool revisit)
     {
         SegmentText.Text = text;

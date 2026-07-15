@@ -17,12 +17,6 @@ namespace ScrollReader;
 /// </summary>
 internal sealed class ReadingSession
 {
-    /// <summary>Steps beyond this are discarded — a wild spin must not run away.</summary>
-    private const int MaxPendingSteps = 5;
-
-    /// <summary>Every segment is visible at least this long.</summary>
-    private static readonly TimeSpan MinDisplayTime = TimeSpan.FromMilliseconds(80);
-
     /// <summary>
     /// Closing requires a deliberate extra notch after dwelling on the last
     /// segment; trailing events of the burst that landed there are ignored.
@@ -34,6 +28,14 @@ internal sealed class ReadingSession
     /// must not count as "any key ends the session".
     /// </summary>
     private static readonly TimeSpan KeyGracePeriod = TimeSpan.FromMilliseconds(600);
+
+    /// <summary>Every segment is visible at least this long.</summary>
+    private readonly TimeSpan _minDisplayTime;
+
+    /// <summary>Steps beyond this are discarded — a wild spin must not run away.</summary>
+    private readonly int _maxPendingSteps;
+
+    private readonly double _fontSize;
 
     private IReadOnlyList<string> _segments = Array.Empty<string>();
     private OverlayWindow? _overlay;
@@ -51,6 +53,13 @@ internal sealed class ReadingSession
     public bool IsActive { get; private set; }
 
     public event Action? Ended;
+
+    public ReadingSession(Settings settings)
+    {
+        _minDisplayTime = TimeSpan.FromMilliseconds(settings.MinDisplayMs);
+        _maxPendingSteps = settings.MaxPendingSteps;
+        _fontSize = settings.FontSize;
+    }
 
     public void Start()
     {
@@ -72,6 +81,7 @@ internal sealed class ReadingSession
         _lastAdvanceAt = _startedAt;
 
         _overlay = new OverlayWindow();
+        _overlay.SetFontSize(_fontSize);
         _overlay.ShowAt(cursor);
         _overlay.SetSegment(_segments[0], 0, _segments.Count, revisit: false);
 
@@ -105,13 +115,13 @@ internal sealed class ReadingSession
             return;
         }
 
-        _pendingSteps = Math.Clamp(_pendingSteps + steps, -MaxPendingSteps, MaxPendingSteps);
+        _pendingSteps = Math.Clamp(_pendingSteps + steps, -_maxPendingSteps, _maxPendingSteps);
         Pump();
     }
 
     private void Pump()
     {
-        if (_pendingSteps != 0 && DateTime.UtcNow - _lastAdvanceAt >= MinDisplayTime)
+        if (_pendingSteps != 0 && DateTime.UtcNow - _lastAdvanceAt >= _minDisplayTime)
             ApplyOneStep();
 
         if (_pendingSteps != 0)
@@ -127,7 +137,7 @@ internal sealed class ReadingSession
 
     private DispatcherTimer CreatePumpTimer()
     {
-        var timer = new DispatcherTimer { Interval = MinDisplayTime };
+        var timer = new DispatcherTimer { Interval = _minDisplayTime };
         timer.Tick += (_, _) =>
         {
             if (_pendingSteps != 0) ApplyOneStep();
