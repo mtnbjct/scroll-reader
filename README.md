@@ -1,64 +1,79 @@
 # Scroll Reader
 
-視線を動かさずに読む、Windows 用の RSVP スタイル読書ツール。
+Read without moving your eyes — an OS-wide RSVP reading tool for Windows.
 
-テキストを選択してホットキーを押すと、文節（日本語）／単語（英語）単位の拡大テキストがカーソル位置に 1 つずつ表示されます。マウスホイールで読み進み、戻ることもできます。
+Select text in any app, press the hotkey, and Scroll Reader shows it one unit at a time — Japanese bunsetsu or English words — enlarged at your cursor. Scroll the wheel to read on, speed up, slow down, or step back. Because the words come to your eyes instead of your eyes chasing the words, you read faster with less fatigue.
 
-> An OS-wide RSVP-style reading tool for Windows. Select any text, press the hotkey, and read it one Japanese bunsetsu / English word at a time with the mouse wheel — without moving your eyes.
+## Usage
 
-## 使い方
+1. Run `ScrollReader.exe` (it lives in the system tray)
+2. Select text in any app and press `Ctrl+Alt+R`
+3. Wheel down: start auto-advance; further down: speed up (shown as `▶3`). Wheel up: slow down → stop → step backwards
+4. Exit: pause on the last unit and scroll down once more / `Esc` / click / any key
 
-1. `ScrollReader.exe` を起動（タスクトレイに常駐）
-2. 任意のアプリでテキストを選択し、`Ctrl+Alt+R`
-3. ホイール下: 自動送り開始、さらに下で加速（`▶3` 表示）。上: 減速 → 停止 → コマ送り巻き戻し
-4. 終了: 最後の文節で一呼吸おいてもう一度下 / `Esc` / クリック / 任意のキー
+- While reading, wheel events go to Scroll Reader — the app underneath does not scroll
+- Re-reading (behind the furthest point you've reached) renders in gray
+- For English text, the optimal recognition point of each word is highlighted red and pinned to a fixed position
+- Set `"wheelMode": "step"` for one-notch-one-unit stepping instead of auto-advance
 
-- 読書モード中のホイールは Scroll Reader が受け取り、下のアプリはスクロールしません
-- 読み返し中（未読の最前線より手前）はテキストがグレーになります
-- 英語テキストでは ORP（最適認識点）が赤くハイライトされ、常に同じ位置に揃います
-- `"wheelMode": "step"` で 1 ノッチ = 1 文節のコマ送りに変更可
+## Build and run
 
-## ビルドと実行
-
-.NET 8 SDK 以降が必要です。
+Requires the .NET 8 SDK or later. Windows only (for now).
 
 ```
-dotnet build                            # ビルド
-dotnet test                             # テスト
-dotnet run --project src/ScrollReader   # 実行
-dotnet publish src/ScrollReader -c Release -o publish   # 配布用ビルド
+dotnet build                            # build
+dotnet test                             # run tests
+dotnet run --project src/ScrollReader   # run
+dotnet publish src/ScrollReader -c Release -o publish   # distributable build
 ```
 
-## 設定
+## Settings
 
-タスクトレイ右クリック →「設定を開く」（実体: `%AppData%\ScrollReader\settings.json`）。保存すると即反映されます。各項目の説明はファイル内のコメントを参照してください。
+Right-click the tray icon → "設定を開く" (open settings), or edit `%AppData%\ScrollReader\settings.json` directly. Changes apply on save — no restart needed. Each key is documented by comments inside the generated file.
 
 ```jsonc
 {
-  "hotkey": "Ctrl+Alt+R",     // "Ctrl+MiddleClick"（Ctrl+ホイールクリック）等も可
-  "wheelMode": "cruise",      // "cruise" または "step"
-  "cruiseBaseMs": 350,        // クルーズ最低速（1文節あたりms）
-  "maxSegmentLength": 7,      // 日本語の表示単位の最大文字数
-  "minDisplayMs": 120,        // 最短表示時間 = 最高速度
-  "maxPendingSteps": 5,       // 先読みバッファ上限
+  "hotkey": "Ctrl+Alt+R",     // also e.g. "Ctrl+MiddleClick"
+  "wheelMode": "cruise",      // "cruise" or "step"
+  "cruiseBaseMs": 350,        // slowest cruise speed (ms per unit)
+  "maxSegmentLength": 7,      // max characters per Japanese unit
+  "segmenter": "mecab",       // "mecab" (bundled dic) or "os" (lightweight)
+  "minDisplayMs": 120,        // minimum display time = top speed
+  "maxPendingSteps": 5,       // wheel input buffer cap
   "fontSize": 44,
-  "orpEnabled": true,         // 英語のORPハイライト
-  "blockedProcesses": []      // 無効にするアプリ（プロセス名）
+  "orpEnabled": true,         // red ORP highlight for English
+  "blockedProcesses": []      // apps where the hotkey is ignored
 }
 ```
 
-素の `"MiddleClick"` はブラウザの中クリック操作等と競合するため、修飾キー付きを推奨します。
+A bare `"MiddleClick"` hotkey conflicts with browser middle-click features; prefer a modified chord like `"Ctrl+MiddleClick"`.
 
-## 既知の制約
+## How it works
 
-- 管理者権限のアプリに対しては、Scroll Reader も管理者権限で起動する必要があります
-- クリップボードフォールバック時、テキスト以外のクリップボード内容は復元されません
-- 文節分割はヒューリスティックであり、完全ではありません
+Selected text is captured via UI Automation (clipboard fallback with restore), a low-level mouse hook takes over the wheel during a session, and a click-through topmost overlay renders the units. Japanese is tokenized by NMeCab with the bundled IPA dictionary (POS-driven bunsetsu assembly), then length-balanced so most units land in 3–7 characters.
 
-## ロードマップ
+## Known limitations
 
-- [ ] macOS / Linux 対応
+- Apps running elevated require Scroll Reader to run elevated too
+- The clipboard fallback restores text content only (not images etc.)
+- Segmentation is heuristic and occasionally imperfect
 
-## ライセンス
+## Roadmap
+
+- [ ] macOS / Linux support
+
+## License
 
 [MIT](LICENSE)
+
+---
+
+## 日本語
+
+視線を動かさずに読む、Windows 用の RSVP スタイル読書ツールです。任意のアプリでテキストを選択して `Ctrl+Alt+R` を押すと、文節／単語単位の拡大テキストがカーソル位置に 1 つずつ表示されます。
+
+- **ホイール下**: 自動送り開始、さらに下で加速（`▶3` 表示）。**上**: 減速 → 停止 → コマ送り巻き戻し
+- **終了**: 最後の文節で一呼吸おいてもう一度下 / `Esc` / クリック / 任意のキー
+- 読み返し中はグレー表示。英語では ORP（最適認識点）が赤くハイライトされ同じ位置に揃います
+- 設定はトレイ右クリック →「設定を開く」（`%AppData%\ScrollReader\settings.json`）。保存で即反映。各項目はファイル内コメント参照
+- ビルドは .NET 8 SDK 以降で `dotnet build` / `dotnet test` / `dotnet run --project src/ScrollReader`
