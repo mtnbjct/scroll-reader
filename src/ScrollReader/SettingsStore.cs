@@ -39,6 +39,9 @@ internal sealed class SettingsStore : IDisposable
           // 拡大テキストのフォントサイズ
           "fontSize": 44,
 
+          // 英語テキストで ORP（最適認識点）を赤くハイライトし、常に同じ位置に揃える
+          "orpEnabled": true,
+
           // ホットキーを無効にするアプリ（プロセス名、.exe は省略可）例: ["Photoshop", "game.exe"]
           "blockedProcesses": []
         }

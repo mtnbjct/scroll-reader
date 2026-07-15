@@ -24,6 +24,9 @@ public sealed class Settings
     /// <summary>Japanese segments stop merging beyond this many characters.</summary>
     public int MaxSegmentLength { get; set; } = Segmentation.Segmenter.DefaultMaxLength;
 
+    /// <summary>Highlight and align the optimal recognition point for non-Japanese text.</summary>
+    public bool OrpEnabled { get; set; } = true;
+
     /// <summary>Process names (with or without .exe) where the hotkey is ignored.</summary>
     public string[] BlockedProcesses { get; set; } = Array.Empty<string>();
 
@@ -47,6 +50,7 @@ public sealed class Settings
         WheelMode = string.Equals(WheelMode?.Trim(), "step", StringComparison.OrdinalIgnoreCase) ? "step" : "cruise",
         CruiseBaseMs = Math.Clamp(CruiseBaseMs, 100, 3000),
         MaxSegmentLength = Math.Clamp(MaxSegmentLength, 4, 20),
+        OrpEnabled = OrpEnabled,
         BlockedProcesses = (BlockedProcesses ?? Array.Empty<string>())
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .Select(p => p.Trim())

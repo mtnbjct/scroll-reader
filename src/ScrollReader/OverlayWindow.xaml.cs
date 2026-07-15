@@ -14,9 +14,12 @@ public partial class OverlayWindow : Window
 {
     private static readonly System.Windows.Media.Brush CurrentBrush = Frozen(0xF2, 0xF3, 0xF5);
     private static readonly System.Windows.Media.Brush RevisitBrush = Frozen(0x84, 0x8B, 0x94);
+    private static readonly System.Windows.Media.Brush PivotBrush = Frozen(0xFF, 0x5C, 0x5C);
+    private static readonly System.Windows.Media.Brush PivotRevisitBrush = Frozen(0xA8, 0x53, 0x53);
 
     private System.Drawing.Point _anchor;
     private double _progress;
+    private double _orpPivotX;
 
     private static System.Windows.Media.SolidColorBrush Frozen(byte r, byte g, byte b)
     {
@@ -48,12 +51,45 @@ public partial class OverlayWindow : Window
         Reposition();
     }
 
-    public void SetFontSize(double size) => SegmentText.FontSize = size;
-
-    public void SetSegment(string text, int index, int total, bool revisit, int cruiseLevel = 0)
+    public void SetFontSize(double size)
     {
-        SegmentText.Text = text;
-        SegmentText.Foreground = revisit ? RevisitBrush : CurrentBrush;
+        SegmentText.FontSize = size;
+        OrpText.FontSize = size;
+    }
+
+    /// <summary>
+    /// Switches the text area to ORP rendering: a fixed-width canvas where
+    /// the pivot letter of every word sits at the same X position, marked by
+    /// small ticks above and below. Sized so the session's longest prefix
+    /// and suffix fit.
+    /// </summary>
+    public void ConfigureOrpLayout(int maxPrefixChars, int maxSuffixChars)
+    {
+        var em = OrpText.FontSize;
+        var charWidth = em * 0.62;
+        _orpPivotX = (Math.Max(2, maxPrefixChars) + 0.5) * charWidth;
+        OrpCanvas.Width = _orpPivotX + (Math.Max(4, maxSuffixChars) + 1.5) * charWidth;
+        OrpCanvas.Height = em * 1.4 + 20;
+        System.Windows.Controls.Canvas.SetTop(OrpText, 10);
+        System.Windows.Controls.Canvas.SetLeft(OrpTopTick, _orpPivotX - 1);
+        System.Windows.Controls.Canvas.SetTop(OrpTopTick, 0);
+        System.Windows.Controls.Canvas.SetLeft(OrpBottomTick, _orpPivotX - 1);
+        System.Windows.Controls.Canvas.SetTop(OrpBottomTick, OrpCanvas.Height - OrpBottomTick.Height);
+        OrpCanvas.Visibility = Visibility.Visible;
+        SegmentText.Visibility = Visibility.Collapsed;
+    }
+
+    public void SetSegment(string text, int index, int total, bool revisit, int cruiseLevel = 0, int orpIndex = -1)
+    {
+        if (orpIndex >= 0 && OrpCanvas.Visibility == Visibility.Visible)
+        {
+            SetOrpText(text, Math.Min(orpIndex, text.Length - 1), revisit);
+        }
+        else
+        {
+            SegmentText.Text = text;
+            SegmentText.Foreground = revisit ? RevisitBrush : CurrentBrush;
+        }
         var position = index == total - 1
             ? $"{total} / {total} ・ もう一度下で終了"
             : $"{index + 1} / {total}";
@@ -73,6 +109,33 @@ public partial class OverlayWindow : Window
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.6) };
         timer.Tick += (_, _) => { timer.Stop(); Close(); };
         timer.Start();
+    }
+
+    private void SetOrpText(string text, int pivot, bool revisit)
+    {
+        OrpPrefixRun.Text = text[..pivot];
+        OrpPivotRun.Text = text.Substring(pivot, 1);
+        OrpSuffixRun.Text = text[(pivot + 1)..];
+        var bodyBrush = revisit ? RevisitBrush : CurrentBrush;
+        OrpPrefixRun.Foreground = bodyBrush;
+        OrpSuffixRun.Foreground = bodyBrush;
+        OrpPivotRun.Foreground = revisit ? PivotRevisitBrush : PivotBrush;
+        System.Windows.Controls.Canvas.SetLeft(OrpText,
+            _orpPivotX - MeasureWidth(OrpPrefixRun.Text) - MeasureWidth(OrpPivotRun.Text) / 2);
+    }
+
+    private double MeasureWidth(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return 0;
+        var formatted = new System.Windows.Media.FormattedText(
+            text,
+            System.Globalization.CultureInfo.CurrentUICulture,
+            System.Windows.FlowDirection.LeftToRight,
+            new System.Windows.Media.Typeface(OrpText.FontFamily, OrpText.FontStyle, OrpText.FontWeight, OrpText.FontStretch),
+            OrpText.FontSize,
+            System.Windows.Media.Brushes.White,
+            VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        return formatted.WidthIncludingTrailingWhitespace;
     }
 
     private void UpdateProgressFill()

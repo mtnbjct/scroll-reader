@@ -12,12 +12,23 @@
         SizeToContent="WidthAndHeight">
     <Border CornerRadius="12" Background="#F0181A1F" Padding="30,18,30,12" MinWidth="240">
         <StackPanel>
-            <TextBlock x:Name="SegmentText"
-                       FontSize="44"
-                       FontWeight="SemiBold"
-                       Foreground="#F2F3F5"
-                       FontFamily="Yu Gothic UI, Segoe UI"
-                       TextAlignment="Center"/>
+            <Grid>
+                <TextBlock x:Name="SegmentText"
+                           FontSize="44"
+                           FontWeight="SemiBold"
+                           Foreground="#F2F3F5"
+                           FontFamily="Yu Gothic UI, Segoe UI"
+                           TextAlignment="Center"/>
+                <Canvas x:Name="OrpCanvas" Visibility="Collapsed" HorizontalAlignment="Center" ClipToBounds="False">
+                    <Rectangle x:Name="OrpTopTick" Width="2" Height="7" Fill="#66FFFFFF" RadiusX="1" RadiusY="1"/>
+                    <Rectangle x:Name="OrpBottomTick" Width="2" Height="7" Fill="#66FFFFFF" RadiusX="1" RadiusY="1"/>
+                    <TextBlock x:Name="OrpText"
+                               FontSize="44"
+                               FontWeight="SemiBold"
+                               Foreground="#F2F3F5"
+                               FontFamily="Yu Gothic UI, Segoe UI"><Run x:Name="OrpPrefixRun"/><Run x:Name="OrpPivotRun"/><Run x:Name="OrpSuffixRun"/></TextBlock>
+                </Canvas>
+            </Grid>
             <Grid x:Name="ProgressPanel" Margin="0,12,0,0">
                 <Rectangle x:Name="ProgressTrack" Height="3" Fill="#33FFFFFF" RadiusX="1.5" RadiusY="1.5"/>
                 <Rectangle x:Name="ProgressFill" Height="3" Fill="#7FB4FF" RadiusX="1.5" RadiusY="1.5"

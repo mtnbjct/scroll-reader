@@ -49,8 +49,10 @@ internal sealed class ReadingSession
     private readonly int _maxCruiseLevel;
     private readonly bool _abortOnMiddleClick;
     private readonly int _maxSegmentLength;
+    private readonly bool _orpEnabled;
 
     private IReadOnlyList<string> _segments = Array.Empty<string>();
+    private int[]? _orpIndices;
     private OverlayWindow? _overlay;
     private MouseHook? _mouse;
     private KeyboardHook? _keyboard;
@@ -80,6 +82,7 @@ internal sealed class ReadingSession
         _maxCruiseLevel = ComputeMaxCruiseLevel(_cruiseBaseMs, settings.MinDisplayMs);
         _abortOnMiddleClick = !middleClickActivation;
         _maxSegmentLength = settings.MaxSegmentLength;
+        _orpEnabled = settings.OrpEnabled;
     }
 
     internal static double CruiseIntervalMs(double baseMs, double floorMs, int level) =>
@@ -114,6 +117,19 @@ internal sealed class ReadingSession
 
         _overlay = new OverlayWindow();
         _overlay.SetFontSize(_fontSize);
+        if (_orpEnabled && !Segmenter.ContainsJapanese(text!))
+        {
+            _orpIndices = new int[segments.Count];
+            int maxPrefix = 0, maxSuffix = 0;
+            for (var i = 0; i < segments.Count; i++)
+            {
+                var pivot = OrpCalculator.PivotIndex(segments[i]);
+                _orpIndices[i] = pivot;
+                maxPrefix = Math.Max(maxPrefix, pivot);
+                maxSuffix = Math.Max(maxSuffix, segments[i].Length - pivot - 1);
+            }
+            _overlay.ConfigureOrpLayout(maxPrefix, maxSuffix);
+        }
         _overlay.ShowAt(cursor);
         UpdateOverlay();
 
@@ -288,7 +304,8 @@ internal sealed class ReadingSession
 
     private void UpdateOverlay() =>
         _overlay?.SetSegment(_segments[_index], _index, _segments.Count,
-            revisit: _index < _maxIndexReached, cruiseLevel: _cruiseLevel);
+            revisit: _index < _maxIndexReached, cruiseLevel: _cruiseLevel,
+            orpIndex: _orpIndices?[_index] ?? -1);
 
     public void End()
     {

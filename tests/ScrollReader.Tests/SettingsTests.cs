@@ -65,6 +65,7 @@ public class SettingsTests
         Assert.Equal("cruise", s.WheelMode);
         Assert.Equal(350, s.CruiseBaseMs);
         Assert.Equal(7, s.MaxSegmentLength);
+        Assert.True(s.OrpEnabled);
         Assert.Empty(s.BlockedProcesses);
     }
 

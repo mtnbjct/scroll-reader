@@ -2,110 +2,62 @@
 
 視線を動かさずに読む、Windows 用の RSVP スタイル読書ツール。
 
-テキストを選択してホットキー（既定: `Ctrl+Alt+R`）を押すと「読書モード」に入り、マウスホイールを回すたびに、文節（日本語）／単語（英語）単位に区切られた拡大テキストがカーソル位置に 1 つずつ表示されます。下に回せば読み進み、上に回せば戻れます。
+テキストを選択してホットキーを押すと、文節（日本語）／単語（英語）単位の拡大テキストがカーソル位置に 1 つずつ表示されます。マウスホイールで読み進み、戻ることもできます。
 
-> Scroll Reader is an OS-wide RSVP-style reading tool for Windows. Select any text, press the hotkey (default `Ctrl+Alt+R`), and scroll the mouse wheel to step through the text one Japanese bunsetsu / English word at a time, displayed enlarged at the cursor position.
+> An OS-wide RSVP-style reading tool for Windows. Select any text, press the hotkey, and read it one Japanese bunsetsu / English word at a time with the mouse wheel — without moving your eyes.
 
 ## 使い方
 
-1. `ScrollReader.exe` を起動する（タスクトレイに常駐します）
-2. 任意のアプリでテキストを選択する
-3. `Ctrl+Alt+R` を押して読書モードに入る
-4. マウスホイールで読み進む（下記の 2 モード）
-5. 終了: 最後の文節で一呼吸おいてもう一度下回転 / `Esc` / マウスクリック / 任意のキー入力 / もう一度 `Ctrl+Alt+R`
+1. `ScrollReader.exe` を起動（タスクトレイに常駐）
+2. 任意のアプリでテキストを選択し、`Ctrl+Alt+R`
+3. ホイール下: 自動送り開始、さらに下で加速（`▶3` 表示）。上: 減速 → 停止 → コマ送り巻き戻し
+4. 終了: 最後の文節で一呼吸おいてもう一度下 / `Esc` / クリック / 任意のキー
 
-読書モード中、ホイールイベントは Scroll Reader が受け取るため、下のアプリはスクロールしません。
+- 読書モード中のホイールは Scroll Reader が受け取り、下のアプリはスクロールしません
+- 読み返し中（未読の最前線より手前）はテキストがグレーになります
+- 英語テキストでは ORP（最適認識点）が赤くハイライトされ、常に同じ位置に揃います
+- `"wheelMode": "step"` で 1 ノッチ = 1 文節のコマ送りに変更可
 
-### ホイールモード
+## ビルドと実行
 
-**cruise（既定）— スロットル方式の自動送り**
+.NET 8 SDK 以降が必要です。
 
-- 下に 1 ノッチ: 自動送り開始（レベル 1 = ゆっくり）
-- さらに下: 1 ノッチごとに 1 段加速（`▶3` のように表示、上限あり）
-- 上: 1 段減速 → レベル 0 で停止
-- 停止中にさらに上: 1 ノッチ = 1 文節の巻き戻し（減速の勢い余りが巻き戻しに化けないよう 0.3 秒の猶予つき）
-
-下向き = 速度調整、上向き = 減速・巻き戻し、という 1 軸のスロットルです。指の速度を維持し続ける必要はありません。
-
-**step — コマ送り**
-
-1 ノッチ = 1 文節。`settings.json` の `"wheelMode": "step"` で切り替え。
-
-### 読み飛ばし防止
-
-ホイール入力はそのまま反映せず、バッファして一定のテンポで再生します。
-
-- 1 文節あたり最短表示時間を保証（既定 120ms、設定可。勢いよく回しても、するするっと流れるだけで飛ばない）
-- 保留ステップは ±5 でクランプ（大量に回した分は破棄され、暴走しない。設定可）
-- 逆回転は保留ステップを相殺するブレーキとして働く
-- 最後の文節では一旦停止し、0.3 秒以上おいてもう一度下に回したときだけ終了
-
-### 巻き戻し表示
-
-到達済みの最前線より手前に戻って表示しているときは、テキストがうっすらグレーになります。白に戻れば最前線（未読の先頭）です。
-
-## 仕組み
-
-| 要素 | 実装 |
-|---|---|
-| 選択テキスト取得 | UI Automation の TextPattern（第一候補）→ 失敗時は Ctrl+C 送信＋クリップボード読み取り（元の内容は復元） |
-| ホイール捕捉 | 低レベルマウスフック（WH_MOUSE_LL）。読書モード中のみインストール |
-| 表示 | 最前面・クリック透過・非アクティブ化のオーバーレイウィンドウ（WPF） |
-| 日本語分節 | Windows 組み込みの `Windows.Data.Text.WordsSegmenter` ＋ 助詞・助動詞を前の語へ結合する文節化ヒューリスティック。さらに長さ平準化パスで短い文節を隣と結合し、ほとんどの表示単位が 3〜`maxSegmentLength`（既定 7）文字に収まるようにする（句読点・改行はまたがない） |
-| 英語分節 | 空白区切り |
+```
+dotnet build                            # ビルド
+dotnet test                             # テスト
+dotnet run --project src/ScrollReader   # 実行
+dotnet publish src/ScrollReader -c Release -o publish   # 配布用ビルド
+```
 
 ## 設定
 
-設定はタスクトレイの「設定を開く」から編集できます（`%AppData%\ScrollReader\settings.json`）。ファイルを保存すると即座に反映されます（再起動不要）。
+タスクトレイ右クリック →「設定を開く」（実体: `%AppData%\ScrollReader\settings.json`）。保存すると即反映されます。各項目の説明はファイル内のコメントを参照してください。
 
 ```jsonc
 {
-  // 読書モード開始のホットキー。例: "Ctrl+Alt+R", "Ctrl+Shift+Space", "F9"
-  // マウス派は "Ctrl+MiddleClick"（Ctrl+ホイールクリック）も指定可
-  "hotkey": "Ctrl+Alt+R",
-  // "cruise"（自動送り・スロットル）または "step"（1ノッチ=1文節）
-  "wheelMode": "cruise",
-  // クルーズ最低速（レベル1）の1文節あたりの時間（ミリ秒）
-  "cruiseBaseMs": 350,
-  // 日本語の表示単位の最大文字数
-  "maxSegmentLength": 7,
-  // 1文節（単語）の最短表示時間（ミリ秒）＝最高速度
-  "minDisplayMs": 120,
-  // ホイールを勢いよく回したときに先読みされる最大ステップ数（stepモード・巻き戻し）
-  "maxPendingSteps": 5,
-  // 拡大テキストのフォントサイズ
+  "hotkey": "Ctrl+Alt+R",     // "Ctrl+MiddleClick"（Ctrl+ホイールクリック）等も可
+  "wheelMode": "cruise",      // "cruise" または "step"
+  "cruiseBaseMs": 350,        // クルーズ最低速（1文節あたりms）
+  "maxSegmentLength": 7,      // 日本語の表示単位の最大文字数
+  "minDisplayMs": 120,        // 最短表示時間 = 最高速度
+  "maxPendingSteps": 5,       // 先読みバッファ上限
   "fontSize": 44,
-  // ホットキーを無効にするアプリ（プロセス名、.exe は省略可）
-  "blockedProcesses": ["Photoshop", "game.exe"]
+  "orpEnabled": true,         // 英語のORPハイライト
+  "blockedProcesses": []      // 無効にするアプリ（プロセス名）
 }
 ```
 
-ホットキーに素の `"MiddleClick"` も指定できますが、ブラウザの「新しいタブで開く」やオートスクロール、一部ターミナルの貼り付けなど中クリックを使うアプリと競合します。修飾キー付き（`"Ctrl+MiddleClick"` など）を推奨します。発動時のクリックは Scroll Reader が飲み込むため、下のアプリには渡りません。
-
-## ビルド
-
-.NET 8 SDK 以降（Windows 10 19041 SDK ターゲット）が必要です。
-
-```
-dotnet build
-dotnet test
-dotnet run --project src/ScrollReader
-```
+素の `"MiddleClick"` はブラウザの中クリック操作等と競合するため、修飾キー付きを推奨します。
 
 ## 既知の制約
 
-- 管理者権限で動作しているアプリのテキストは、Scroll Reader も管理者権限で起動しないと取得・フックできません（Windows の仕様）
-- クリップボードフォールバック時、テキスト以外のクリップボード内容（画像など）は復元されません
+- 管理者権限のアプリに対しては、Scroll Reader も管理者権限で起動する必要があります
+- クリップボードフォールバック時、テキスト以外のクリップボード内容は復元されません
 - 文節分割はヒューリスティックであり、完全ではありません
 
 ## ロードマップ
 
-- [x] 設定ファイル（ホットキー・フォントサイズ・テンポ）＋ホットリロード
-- [x] 禁止アプリリスト（プロセス名ベース）
-- [x] クルーズモード（スロットル方式: 下=加速、上=減速→停止→巻き戻し）
-- [x] マウスホットキー（Ctrl+ホイールクリック等）
 - [ ] 設定 GUI
-- [ ] 英語向け ORP（最適認識点）アライメント
 - [ ] macOS / Linux 対応
 
 ## ライセンス
