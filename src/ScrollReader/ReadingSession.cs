@@ -17,6 +17,13 @@ internal sealed class ReadingSession
     private int _index;
     private int _wheelAccumulator;
     private bool _ended;
+    private DateTime _startedAt;
+
+    /// <summary>
+    /// Key-repeat from a still-held hotkey key (e.g. the R of Ctrl+Alt+R)
+    /// must not count as "any key ends the session".
+    /// </summary>
+    private static readonly TimeSpan KeyGracePeriod = TimeSpan.FromMilliseconds(600);
 
     public bool IsActive { get; private set; }
 
@@ -38,6 +45,7 @@ internal sealed class ReadingSession
 
         _segments = segments;
         IsActive = true;
+        _startedAt = DateTime.UtcNow;
 
         _overlay = new OverlayWindow();
         _overlay.ShowAt(cursor);
@@ -50,7 +58,10 @@ internal sealed class ReadingSession
 
         _keyboard = new KeyboardHook();
         _keyboard.EscapePressed += End;
-        _keyboard.OtherKeyDown += End;
+        _keyboard.OtherKeyDown += () =>
+        {
+            if (DateTime.UtcNow - _startedAt >= KeyGracePeriod) End();
+        };
         _keyboard.Install();
     }
 
