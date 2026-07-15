@@ -37,7 +37,7 @@ public class SegmenterTests
         var segments = Segmenter.Segment(text);
         Assert.Equal(text, string.Concat(segments));
         var joined = string.Join("|", segments);
-        var within = segments.Count(s => s.Length is >= 3 and <= 9);
+        var within = segments.Count(s => s.Length is >= 3 and <= 8);
         Assert.True(within >= segments.Count * 0.6, $"only {within}/{segments.Count} in range: {joined}");
         var tiny = segments.Count(s => s.Length <= 2);
         Assert.True(tiny <= segments.Count * 0.2, $"too many tiny segments: {joined}");
@@ -48,7 +48,18 @@ public class SegmenterTests
     {
         var segments = Segmenter.Segment("生徒が囃したからである。");
         Assert.Equal("生徒が囃したからである。", string.Concat(segments));
-        Assert.All(segments, s => Assert.True(s.Length <= 10, $"too long: {s}"));
+        Assert.All(segments, s => Assert.True(s.Length <= 8, $"too long: {s}"));
+    }
+
+    [Fact]
+    public void MaxSegmentLengthIsAdjustable()
+    {
+        const string text = "視線を移動させずに読書速度を高める。";
+        var narrow = Segmenter.Segment(text, maxLength: 4);
+        var wide = Segmenter.Segment(text, maxLength: 12);
+        Assert.Equal(text, string.Concat(narrow));
+        Assert.Equal(text, string.Concat(wide));
+        Assert.True(narrow.Count > wide.Count);
     }
 
     [Fact]

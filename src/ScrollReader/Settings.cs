@@ -21,6 +21,9 @@ public sealed class Settings
     /// <summary>Cruise interval at speed level 1, in milliseconds; each level is 25% faster, floored at MinDisplayMs.</summary>
     public int CruiseBaseMs { get; set; } = 350;
 
+    /// <summary>Japanese segments stop merging beyond this many characters.</summary>
+    public int MaxSegmentLength { get; set; } = Segmentation.Segmenter.DefaultMaxLength;
+
     /// <summary>Process names (with or without .exe) where the hotkey is ignored.</summary>
     public string[] BlockedProcesses { get; set; } = Array.Empty<string>();
 
@@ -43,6 +46,7 @@ public sealed class Settings
         FontSize = double.IsFinite(FontSize) ? Math.Clamp(FontSize, 12, 200) : 44,
         WheelMode = string.Equals(WheelMode?.Trim(), "step", StringComparison.OrdinalIgnoreCase) ? "step" : "cruise",
         CruiseBaseMs = Math.Clamp(CruiseBaseMs, 100, 3000),
+        MaxSegmentLength = Math.Clamp(MaxSegmentLength, 4, 20),
         BlockedProcesses = (BlockedProcesses ?? Array.Empty<string>())
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .Select(p => p.Trim())

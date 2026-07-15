@@ -10,20 +10,21 @@ namespace ScrollReader.Segmentation;
 public static class Segmenter
 {
     /// <summary>
-    /// Japanese segments aim for 3–8 characters: neighbours merge while one
-    /// of them is shorter than the minimum, and function-word chains stop
-    /// growing at the maximum. Segments outside the range can still occur
-    /// (long single tokens, pause punctuation) — that beats unnatural cuts.
+    /// Japanese segments aim for MinTargetLength..maxLength characters:
+    /// neighbours merge while one of them is shorter than the minimum, and
+    /// function-word chains stop growing at the maximum. Segments outside
+    /// the range can still occur (long single tokens, pause punctuation) —
+    /// that beats unnatural cuts.
     /// </summary>
     private const int MinTargetLength = 3;
 
-    private const int MaxTargetLength = 8;
+    public const int DefaultMaxLength = 7;
 
-    public static IReadOnlyList<string> Segment(string text)
+    public static IReadOnlyList<string> Segment(string text, int maxLength = DefaultMaxLength)
     {
         text = text.Replace("\r\n", "\n").Trim();
         if (text.Length == 0) return Array.Empty<string>();
-        return ContainsJapanese(text) ? SegmentJapanese(text) : SegmentByWhitespace(text);
+        return ContainsJapanese(text) ? SegmentJapanese(text, maxLength) : SegmentByWhitespace(text);
     }
 
     public static bool ContainsJapanese(string text) => text.Any(IsJapaneseChar);
@@ -38,7 +39,7 @@ public static class Segmenter
     private static IReadOnlyList<string> SegmentByWhitespace(string text) =>
         text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
-    private static IReadOnlyList<string> SegmentJapanese(string text)
+    private static IReadOnlyList<string> SegmentJapanese(string text, int maxLength)
     {
         var tokens = new WordsSegmenter("ja").GetTokens(text);
         var result = new List<string>();
@@ -79,7 +80,7 @@ public static class Segmenter
                 && !boundary
                 && result.Count > 0
                 && FunctionWords.Contains(word)
-                && result[^1].Length + word.Length <= MaxTargetLength
+                && result[^1].Length + word.Length <= maxLength
                 && !EndsWithPause(result[^1]);
 
             if (merge)
@@ -110,7 +111,7 @@ public static class Segmenter
                 hardBreakBefore.Add(false);
             }
         }
-        return BalanceLengths(result, hardBreakBefore);
+        return BalanceLengths(result, hardBreakBefore, maxLength);
     }
 
     /// <summary>
@@ -118,7 +119,7 @@ public static class Segmenter
     /// in the 3–8 character sweet spot. Never merges across whitespace,
     /// newlines, or pause punctuation (。、！？…).
     /// </summary>
-    private static List<string> BalanceLengths(List<string> segments, List<bool> hardBreakBefore)
+    private static List<string> BalanceLengths(List<string> segments, List<bool> hardBreakBefore, int maxLength)
     {
         var result = new List<string>();
         for (var i = 0; i < segments.Count; i++)
@@ -128,7 +129,7 @@ public static class Segmenter
                 && !hardBreakBefore[i]
                 && !EndsWithPause(result[^1])
                 && (result[^1].Length < MinTargetLength || current.Length < MinTargetLength)
-                && result[^1].Length + current.Length <= MaxTargetLength;
+                && result[^1].Length + current.Length <= maxLength;
 
             if (mergeable) result[^1] += current;
             else result.Add(current);

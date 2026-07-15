@@ -64,7 +64,15 @@ public class SettingsTests
         Assert.Equal(44, s.FontSize);
         Assert.Equal("cruise", s.WheelMode);
         Assert.Equal(350, s.CruiseBaseMs);
+        Assert.Equal(7, s.MaxSegmentLength);
         Assert.Empty(s.BlockedProcesses);
+    }
+
+    [Fact]
+    public void MaxSegmentLengthIsClamped()
+    {
+        Assert.Equal(4, new Settings { MaxSegmentLength = 1 }.Sanitized().MaxSegmentLength);
+        Assert.Equal(20, new Settings { MaxSegmentLength = 99 }.Sanitized().MaxSegmentLength);
     }
 
     [Theory]
