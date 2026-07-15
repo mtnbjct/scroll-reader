@@ -50,6 +50,7 @@ internal sealed class ReadingSession
     private readonly bool _abortOnMiddleClick;
     private readonly int _maxSegmentLength;
     private readonly bool _orpEnabled;
+    private readonly string _segmenterEngine;
 
     private IReadOnlyList<string> _segments = Array.Empty<string>();
     private int[]? _orpIndices;
@@ -83,6 +84,7 @@ internal sealed class ReadingSession
         _abortOnMiddleClick = !middleClickActivation;
         _maxSegmentLength = settings.MaxSegmentLength;
         _orpEnabled = settings.OrpEnabled;
+        _segmenterEngine = settings.Segmenter;
     }
 
     internal static double CruiseIntervalMs(double baseMs, double floorMs, int level) =>
@@ -115,7 +117,9 @@ internal sealed class ReadingSession
         var cursor = new System.Drawing.Point(pt.X, pt.Y);
 
         var text = TextCapture.CaptureSelection();
-        var segments = text is null ? Array.Empty<string>() : Segmenter.Segment(text, _maxSegmentLength);
+        var segments = text is null
+            ? Array.Empty<string>()
+            : Segmenter.Segment(text, _maxSegmentLength, _segmenterEngine);
         if (segments.Count == 0)
         {
             new OverlayWindow().ShowTransientMessage("テキストが選択されていません", cursor);

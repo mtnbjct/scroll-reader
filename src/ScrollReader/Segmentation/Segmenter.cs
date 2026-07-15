@@ -1,30 +1,35 @@
-using Windows.Data.Text;
-
 namespace ScrollReader.Segmentation;
 
 /// <summary>
 /// Splits text into RSVP display units: whitespace-delimited words for
-/// English, bunsetsu-like chunks for Japanese (OS word segmentation plus a
-/// heuristic that merges particles/auxiliaries into the preceding word).
+/// English, bunsetsu-like chunks for Japanese. Japanese tokens come from a
+/// pluggable tokenizer — NMeCab with the bundled IPA dictionary by default,
+/// the OS word segmenter as fallback ("segmenter": "os" in settings).
 /// </summary>
 public static class Segmenter
 {
     /// <summary>
     /// Japanese segments aim for MinTargetLength..maxLength characters:
     /// neighbours merge while one of them is shorter than the minimum, and
-    /// function-word chains stop growing at the maximum. Segments outside
-    /// the range can still occur (long single tokens, pause punctuation) —
-    /// that beats unnatural cuts.
+    /// attachment chains stop growing at the maximum. Segments outside the
+    /// range can still occur (long single tokens, pause punctuation) — that
+    /// beats unnatural cuts.
     /// </summary>
     private const int MinTargetLength = 3;
 
     public const int DefaultMaxLength = 7;
 
-    public static IReadOnlyList<string> Segment(string text, int maxLength = DefaultMaxLength)
+    private static readonly Lazy<IJapaneseTokenizer?> MeCab = new(MeCabTokenizer.TryCreate);
+    private static readonly Lazy<IJapaneseTokenizer> Os = new(() => new OsTokenizer());
+
+    public static IReadOnlyList<string> Segment(string text, int maxLength = DefaultMaxLength, string engine = "mecab")
     {
         text = text.Replace("\r\n", "\n").Trim();
         if (text.Length == 0) return Array.Empty<string>();
-        return ContainsJapanese(text) ? SegmentJapanese(text, maxLength) : SegmentByWhitespace(text);
+        if (!ContainsJapanese(text)) return SegmentByWhitespace(text);
+
+        var tokenizer = engine == "os" ? Os.Value : MeCab.Value ?? Os.Value;
+        return SegmentJapanese(text, maxLength, tokenizer);
     }
 
     public static bool ContainsJapanese(string text) => text.Any(IsJapaneseChar);
@@ -39,85 +44,62 @@ public static class Segmenter
     private static IReadOnlyList<string> SegmentByWhitespace(string text) =>
         text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
-    private static IReadOnlyList<string> SegmentJapanese(string text, int maxLength)
+    private static IReadOnlyList<string> SegmentJapanese(string text, int maxLength, IJapaneseTokenizer tokenizer)
     {
-        var tokens = new WordsSegmenter("ja").GetTokens(text);
-        var result = new List<string>();
-        var hardBreakBefore = new List<bool>(); // whitespace/newline preceded the segment
-        var pendingPrefix = "";   // opening brackets waiting for the next token
-        var boundary = false;     // whitespace seen since the last token
-        var cursor = 0;
+        var segments = new List<string>();
+        var hardBreakBefore = new List<bool>();
+        var pendingPrefix = "";   // opening brackets / prefixes waiting for the next content token
+        var prefixBreak = false;
 
-        foreach (var token in tokens)
+        void AddSegment(string surface, bool breakBefore)
         {
-            var start = (int)token.SourceTextSegment.StartPosition;
-            var length = (int)token.SourceTextSegment.Length;
-
-            // Characters the segmenter skipped (punctuation, whitespace, symbols).
-            foreach (var c in text.AsSpan(cursor, start - cursor))
-            {
-                if (char.IsWhiteSpace(c))
-                {
-                    boundary = true;
-                }
-                else if (IsOpeningBracket(c))
-                {
-                    pendingPrefix += c;
-                }
-                else if (result.Count > 0 && pendingPrefix.Length == 0)
-                {
-                    result[^1] += c; // 。、！？」など closing punctuation sticks to the previous chunk
-                }
-                else
-                {
-                    pendingPrefix += c;
-                }
-            }
-
-            // Use the source substring, not token.Text, which may be normalized.
-            var word = text.Substring(start, length);
-            var merge = pendingPrefix.Length == 0
-                && !boundary
-                && result.Count > 0
-                && FunctionWords.Contains(word)
-                && result[^1].Length + word.Length <= maxLength
-                && !EndsWithPause(result[^1]);
-
-            if (merge)
-            {
-                result[^1] += word;
-            }
-            else
-            {
-                result.Add(pendingPrefix + word);
-                hardBreakBefore.Add(boundary);
-                pendingPrefix = "";
-            }
-            boundary = false;
-            cursor = start + length;
+            segments.Add(pendingPrefix + surface);
+            hardBreakBefore.Add(breakBefore || prefixBreak);
+            pendingPrefix = "";
+            prefixBreak = false;
         }
 
-        // Trailing punctuation after the last token.
-        foreach (var c in text.AsSpan(cursor))
+        foreach (var token in tokenizer.Tokenize(text))
         {
-            if (!char.IsWhiteSpace(c) && result.Count > 0) result[^1] += c;
+            switch (token.Kind)
+            {
+                case JaTokenKind.AttachNext:
+                    if (pendingPrefix.Length == 0) prefixBreak = token.HardBreakBefore;
+                    pendingPrefix += token.Surface;
+                    break;
+
+                case JaTokenKind.Glue:
+                    if (pendingPrefix.Length > 0) pendingPrefix += token.Surface;
+                    else if (segments.Count > 0 && !token.HardBreakBefore) segments[^1] += token.Surface;
+                    else AddSegment(token.Surface, token.HardBreakBefore);
+                    break;
+
+                case JaTokenKind.Attach when pendingPrefix.Length == 0
+                    && !token.HardBreakBefore
+                    && segments.Count > 0
+                    && segments[^1].Length + token.Surface.Length <= maxLength
+                    && !EndsWithPause(segments[^1]):
+                    segments[^1] += token.Surface;
+                    break;
+
+                default: // Content, or Attach that could not attach
+                    AddSegment(token.Surface, token.HardBreakBefore);
+                    break;
+            }
         }
+
         if (pendingPrefix.Length > 0)
         {
-            if (result.Count > 0) result[^1] += pendingPrefix;
-            else
-            {
-                result.Add(pendingPrefix);
-                hardBreakBefore.Add(false);
-            }
+            if (segments.Count > 0) segments[^1] += pendingPrefix;
+            else AddSegment("", false);
         }
-        return BalanceLengths(result, hardBreakBefore, maxLength);
+        return BalanceLengths(segments, hardBreakBefore, maxLength);
     }
 
     /// <summary>
     /// Second pass: pulls too-short bunsetsu together so most segments land
-    /// in the 3–8 character sweet spot. Never merges across whitespace,
-    /// newlines, or pause punctuation (。、！？…).
+    /// in the 3..maxLength character sweet spot. Never merges across
+    /// whitespace, newlines, or pause punctuation (。、！？…).
     /// </summary>
     private static List<string> BalanceLengths(List<string> segments, List<bool> hardBreakBefore, int maxLength)
     {
@@ -125,6 +107,7 @@ public static class Segmenter
         for (var i = 0; i < segments.Count; i++)
         {
             var current = segments[i];
+            if (current.Length == 0) continue;
             var mergeable = result.Count > 0
                 && !hardBreakBefore[i]
                 && !EndsWithPause(result[^1])
@@ -137,38 +120,6 @@ public static class Segmenter
         return result;
     }
 
-    private static bool IsOpeningBracket(char c) =>
-        c is '「' or '『' or '（' or '(' or '【' or '〈' or '《' or '〔' or '［' or '[' or '｛' or '{' or '“' or '‘' or '"' or '\'';
-
     private static bool EndsWithPause(string s) =>
         s.Length > 0 && s[^1] is '。' or '、' or '！' or '？' or '!' or '?' or '…' or '.' or ',' or '，' or '．';
-
-    /// <summary>
-    /// Particles, auxiliary verbs, and formal nouns that attach to the
-    /// preceding content word to approximate bunsetsu boundaries.
-    /// </summary>
-    private static readonly HashSet<string> FunctionWords = new(StringComparer.Ordinal)
-    {
-        // 格助詞・係助詞・副助詞・終助詞
-        "は", "が", "を", "に", "へ", "と", "で", "も", "の", "や", "か", "ね", "よ", "な", "ぞ", "ぜ", "わ", "さ",
-        "から", "まで", "より", "ほど", "くらい", "ぐらい", "など", "なり", "だけ", "しか", "ばかり", "こそ", "さえ",
-        "って", "とか", "でも", "かな", "かしら",
-        // 複合助詞
-        "では", "には", "とは", "へは", "にも", "かも", "のは", "のが", "のを", "への", "までに", "からは",
-        // 接続助詞
-        "て", "で", "ば", "と", "ても", "たら", "なら", "ので", "のに", "けど", "けれど", "けれども", "し",
-        "たり", "つつ", "ながら", "ものの",
-        // 助動詞・補助的な語尾
-        "だ", "です", "ます", "ました", "ません", "でした", "だった", "だろう", "でしょう", "た", "ぬ", "ん",
-        "ない", "なかった", "なく", "なけれ", "ず", "う", "よう", "まい", "たい", "たく", "たかった",
-        "らしい", "そう", "よう", "みたい", "べき", "はず",
-        "れ", "られ", "せ", "させ", "れる", "られる", "せる", "させる",
-        // 補助動詞・形式名詞
-        "いる", "いた", "いて", "います", "いました", "いない", "ある", "あった", "あります", "ありました",
-        "おり", "おります", "しまう", "しまった", "ください", "くださって", "いただく", "いただき", "いただいた",
-        "する", "した", "して", "します", "しました", "され", "される", "された", "されて", "できる", "できた", "でき",
-        "こと", "もの", "ため", "わけ", "つもり", "ところ",
-        // 接続的な複合表現
-        "という", "といった", "として", "とともに", "について", "における", "によって", "による", "に対して", "かどうか",
-    };
 }

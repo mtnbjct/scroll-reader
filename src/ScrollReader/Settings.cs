@@ -27,6 +27,9 @@ public sealed class Settings
     /// <summary>Highlight and align the optimal recognition point for non-Japanese text.</summary>
     public bool OrpEnabled { get; set; } = true;
 
+    /// <summary>Japanese tokenizer: "mecab" (NMeCab + IPA dictionary) or "os" (Windows WordsSegmenter).</summary>
+    public string Segmenter { get; set; } = "mecab";
+
     /// <summary>Process names (with or without .exe) where the hotkey is ignored.</summary>
     public string[] BlockedProcesses { get; set; } = Array.Empty<string>();
 
@@ -51,6 +54,7 @@ public sealed class Settings
         CruiseBaseMs = Math.Clamp(CruiseBaseMs, 100, 3000),
         MaxSegmentLength = Math.Clamp(MaxSegmentLength, 4, 20),
         OrpEnabled = OrpEnabled,
+        Segmenter = string.Equals(Segmenter?.Trim(), "os", StringComparison.OrdinalIgnoreCase) ? "os" : "mecab",
         BlockedProcesses = (BlockedProcesses ?? Array.Empty<string>())
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .Select(p => p.Trim())

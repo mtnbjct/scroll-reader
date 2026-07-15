@@ -66,7 +66,18 @@ public class SettingsTests
         Assert.Equal(350, s.CruiseBaseMs);
         Assert.Equal(7, s.MaxSegmentLength);
         Assert.True(s.OrpEnabled);
+        Assert.Equal("mecab", s.Segmenter);
         Assert.Empty(s.BlockedProcesses);
+    }
+
+    [Theory]
+    [InlineData("os", "os")]
+    [InlineData("OS", "os")]
+    [InlineData("mecab", "mecab")]
+    [InlineData("typo", "mecab")]
+    public void SegmenterEngineNormalizes(string input, string expected)
+    {
+        Assert.Equal(expected, new Settings { Segmenter = input }.Sanitized().Segmenter);
     }
 
     [Fact]

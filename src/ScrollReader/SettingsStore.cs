@@ -30,6 +30,9 @@ internal sealed class SettingsStore : IDisposable
           // 日本語の表示単位の最大文字数。これを超える結合をしない（トークン自体が長い場合は超えることあり）
           "maxSegmentLength": 7,
 
+          // 日本語の分割エンジン: "mecab"（同梱辞書・高精度）または "os"（Windows組み込み・軽量）
+          "segmenter": "mecab",
+
           // 1文節（単語）の最短表示時間（ミリ秒）。大きいほどゆっくり流れる
           "minDisplayMs": 120,
 
