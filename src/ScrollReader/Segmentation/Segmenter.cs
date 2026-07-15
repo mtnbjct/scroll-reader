@@ -9,8 +9,15 @@ namespace ScrollReader.Segmentation;
 /// </summary>
 public static class Segmenter
 {
-    /// <summary>Merged Japanese segments longer than this stop absorbing function words.</summary>
-    private const int MaxMergedLength = 14;
+    /// <summary>
+    /// Japanese segments aim for 3–8 characters: neighbours merge while one
+    /// of them is shorter than the minimum, and function-word chains stop
+    /// growing at the maximum. Segments outside the range can still occur
+    /// (long single tokens, pause punctuation) — that beats unnatural cuts.
+    /// </summary>
+    private const int MinTargetLength = 3;
+
+    private const int MaxTargetLength = 8;
 
     public static IReadOnlyList<string> Segment(string text)
     {
@@ -35,6 +42,7 @@ public static class Segmenter
     {
         var tokens = new WordsSegmenter("ja").GetTokens(text);
         var result = new List<string>();
+        var hardBreakBefore = new List<bool>(); // whitespace/newline preceded the segment
         var pendingPrefix = "";   // opening brackets waiting for the next token
         var boundary = false;     // whitespace seen since the last token
         var cursor = 0;
@@ -71,8 +79,8 @@ public static class Segmenter
                 && !boundary
                 && result.Count > 0
                 && FunctionWords.Contains(word)
-                && result[^1].Length + word.Length <= MaxMergedLength
-                && !EndsWithSentencePunctuation(result[^1]);
+                && result[^1].Length + word.Length <= MaxTargetLength
+                && !EndsWithPause(result[^1]);
 
             if (merge)
             {
@@ -81,6 +89,7 @@ public static class Segmenter
             else
             {
                 result.Add(pendingPrefix + word);
+                hardBreakBefore.Add(boundary);
                 pendingPrefix = "";
             }
             boundary = false;
@@ -95,7 +104,34 @@ public static class Segmenter
         if (pendingPrefix.Length > 0)
         {
             if (result.Count > 0) result[^1] += pendingPrefix;
-            else result.Add(pendingPrefix);
+            else
+            {
+                result.Add(pendingPrefix);
+                hardBreakBefore.Add(false);
+            }
+        }
+        return BalanceLengths(result, hardBreakBefore);
+    }
+
+    /// <summary>
+    /// Second pass: pulls too-short bunsetsu together so most segments land
+    /// in the 3–8 character sweet spot. Never merges across whitespace,
+    /// newlines, or pause punctuation (。、！？…).
+    /// </summary>
+    private static List<string> BalanceLengths(List<string> segments, List<bool> hardBreakBefore)
+    {
+        var result = new List<string>();
+        for (var i = 0; i < segments.Count; i++)
+        {
+            var current = segments[i];
+            var mergeable = result.Count > 0
+                && !hardBreakBefore[i]
+                && !EndsWithPause(result[^1])
+                && (result[^1].Length < MinTargetLength || current.Length < MinTargetLength)
+                && result[^1].Length + current.Length <= MaxTargetLength;
+
+            if (mergeable) result[^1] += current;
+            else result.Add(current);
         }
         return result;
     }
@@ -103,8 +139,8 @@ public static class Segmenter
     private static bool IsOpeningBracket(char c) =>
         c is '「' or '『' or '（' or '(' or '【' or '〈' or '《' or '〔' or '［' or '[' or '｛' or '{' or '“' or '‘' or '"' or '\'';
 
-    private static bool EndsWithSentencePunctuation(string s) =>
-        s.Length > 0 && s[^1] is '。' or '！' or '？' or '!' or '?' or '…' or '.';
+    private static bool EndsWithPause(string s) =>
+        s.Length > 0 && s[^1] is '。' or '、' or '！' or '？' or '!' or '?' or '…' or '.' or ',' or '，' or '．';
 
     /// <summary>
     /// Particles, auxiliary verbs, and formal nouns that attach to the

@@ -23,8 +23,42 @@ public class SegmenterTests
     [Fact]
     public void JapaneseMergesParticlesIntoBunsetsu()
     {
+        // 私/は and 本/を merge into bunsetsu; the two short bunsetsu then
+        // merge again in the length-balancing pass.
         var segments = Segmenter.Segment("私は本を読んだ。");
-        Assert.Equal(new[] { "私は", "本を", "読んだ。" }, segments);
+        Assert.Equal(new[] { "私は本を", "読んだ。" }, segments);
+    }
+
+    [Fact]
+    public void JapaneseBalancesSegmentLengths()
+    {
+        // 坊っちゃん冒頭。ほとんどの文節が 3〜9 文字に収まること。
+        const string text = "親譲りの無鉄砲で小供の時から損ばかりしている。小学校に居る時分学校の二階から飛び降りて一週間ほど腰を抜かした事がある。";
+        var segments = Segmenter.Segment(text);
+        Assert.Equal(text, string.Concat(segments));
+        var joined = string.Join("|", segments);
+        var within = segments.Count(s => s.Length is >= 3 and <= 9);
+        Assert.True(within >= segments.Count * 0.6, $"only {within}/{segments.Count} in range: {joined}");
+        var tiny = segments.Count(s => s.Length <= 2);
+        Assert.True(tiny <= segments.Count * 0.2, $"too many tiny segments: {joined}");
+    }
+
+    [Fact]
+    public void JapaneseFunctionChainsStopGrowingNearMaxLength()
+    {
+        var segments = Segmenter.Segment("生徒が囃したからである。");
+        Assert.Equal("生徒が囃したからである。", string.Concat(segments));
+        Assert.All(segments, s => Assert.True(s.Length <= 10, $"too long: {s}"));
+    }
+
+    [Fact]
+    public void JapaneseDoesNotMergeAcrossPausePunctuation()
+    {
+        var segments = Segmenter.Segment("しかし、庭は広い。");
+        Assert.Equal("しかし、庭は広い。", string.Concat(segments));
+        // 、 で終わる文節に後続がくっつかないこと
+        var index = segments.ToList().FindIndex(s => s.EndsWith('、'));
+        Assert.True(index >= 0 && index < segments.Count - 1);
     }
 
     [Fact]
@@ -51,8 +85,9 @@ public class SegmenterTests
     public void OpeningBracketSticksToFollowingSegment()
     {
         var segments = Segmenter.Segment("彼は「はい」と答えた。");
-        Assert.Contains(segments, s => s.StartsWith('「'));
         Assert.Equal("彼は「はい」と答えた。", string.Concat(segments));
+        // 開き括弧が文節の末尾に取り残されないこと
+        Assert.DoesNotContain(segments, s => s.EndsWith('「'));
     }
 
     [Fact]
