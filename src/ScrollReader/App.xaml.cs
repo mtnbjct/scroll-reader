@@ -21,6 +21,11 @@ public partial class App : System.Windows.Application
         _instanceMutex = new Mutex(initiallyOwned: true, "ScrollReader.SingleInstance", out var createdNew);
         if (!createdNew)
         {
+            // Exiting silently makes "why aren't my settings applied?"
+            // debugging miserable — the user keeps talking to the old instance.
+            System.Windows.MessageBox.Show(
+                "Scroll Reader は既に起動しています。タスクトレイのアイコンから操作してください。",
+                "Scroll Reader");
             Shutdown();
             return;
         }
