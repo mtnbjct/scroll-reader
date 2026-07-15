@@ -12,8 +12,18 @@ namespace ScrollReader;
 /// </summary>
 public partial class OverlayWindow : Window
 {
+    private static readonly System.Windows.Media.Brush CurrentBrush = Frozen(0xF2, 0xF3, 0xF5);
+    private static readonly System.Windows.Media.Brush RevisitBrush = Frozen(0x84, 0x8B, 0x94);
+
     private System.Drawing.Point _anchor;
     private double _progress;
+
+    private static System.Windows.Media.SolidColorBrush Frozen(byte r, byte g, byte b)
+    {
+        var brush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
 
     public OverlayWindow()
     {
@@ -38,10 +48,13 @@ public partial class OverlayWindow : Window
         Reposition();
     }
 
-    public void SetSegment(string text, int index, int total)
+    public void SetSegment(string text, int index, int total, bool revisit)
     {
         SegmentText.Text = text;
-        ProgressText.Text = $"{index + 1} / {total}";
+        SegmentText.Foreground = revisit ? RevisitBrush : CurrentBrush;
+        ProgressText.Text = index == total - 1
+            ? $"{total} / {total} ・ もう一度下で終了"
+            : $"{index + 1} / {total}";
         _progress = total > 0 ? (index + 1) / (double)total : 0;
         UpdateProgressFill();
     }

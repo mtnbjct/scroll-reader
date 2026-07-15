@@ -1,3 +1,4 @@
+using System.Windows.Threading;
 using ScrollReader.Native;
 using ScrollReader.Segmentation;
 
@@ -6,24 +7,46 @@ namespace ScrollReader;
 /// <summary>
 /// One reading session: captures the selection, shows the overlay, and steps
 /// through segments as the wheel turns. Wheel down advances, wheel up goes
-/// back; scrolling past the end, Esc, a click, or any key press ends it.
+/// back; Esc, a click, or any key press ends it.
+///
+/// Wheel input is buffered and paced rather than applied directly: each
+/// segment stays on screen at least <see cref="MinDisplayTime"/>, and at most
+/// <see cref="MaxPendingSteps"/> steps queue up, so a burst of notches plays
+/// back readably instead of skipping words. Opposite-direction input cancels
+/// the queue first, acting as a brake.
 /// </summary>
 internal sealed class ReadingSession
 {
-    private IReadOnlyList<string> _segments = Array.Empty<string>();
-    private OverlayWindow? _overlay;
-    private MouseHook? _mouse;
-    private KeyboardHook? _keyboard;
-    private int _index;
-    private int _wheelAccumulator;
-    private bool _ended;
-    private DateTime _startedAt;
+    /// <summary>Steps beyond this are discarded — a wild spin must not run away.</summary>
+    private const int MaxPendingSteps = 5;
+
+    /// <summary>Every segment is visible at least this long.</summary>
+    private static readonly TimeSpan MinDisplayTime = TimeSpan.FromMilliseconds(80);
+
+    /// <summary>
+    /// Closing requires a deliberate extra notch after dwelling on the last
+    /// segment; trailing events of the burst that landed there are ignored.
+    /// </summary>
+    private static readonly TimeSpan EndConfirmDelay = TimeSpan.FromMilliseconds(300);
 
     /// <summary>
     /// Key-repeat from a still-held hotkey key (e.g. the R of Ctrl+Alt+R)
     /// must not count as "any key ends the session".
     /// </summary>
     private static readonly TimeSpan KeyGracePeriod = TimeSpan.FromMilliseconds(600);
+
+    private IReadOnlyList<string> _segments = Array.Empty<string>();
+    private OverlayWindow? _overlay;
+    private MouseHook? _mouse;
+    private KeyboardHook? _keyboard;
+    private DispatcherTimer? _pumpTimer;
+    private int _index;
+    private int _maxIndexReached;
+    private int _wheelAccumulator;
+    private int _pendingSteps;
+    private DateTime _startedAt;
+    private DateTime _lastAdvanceAt;
+    private bool _ended;
 
     public bool IsActive { get; private set; }
 
@@ -46,10 +69,11 @@ internal sealed class ReadingSession
         _segments = segments;
         IsActive = true;
         _startedAt = DateTime.UtcNow;
+        _lastAdvanceAt = _startedAt;
 
         _overlay = new OverlayWindow();
         _overlay.ShowAt(cursor);
-        _overlay.SetSegment(_segments[0], 0, _segments.Count);
+        _overlay.SetSegment(_segments[0], 0, _segments.Count, revisit: false);
 
         _mouse = new MouseHook();
         _mouse.Wheel += OnWheel;
@@ -73,21 +97,69 @@ internal sealed class ReadingSession
         var steps = 0;
         while (_wheelAccumulator >= 120) { _wheelAccumulator -= 120; steps++; }
         while (_wheelAccumulator <= -120) { _wheelAccumulator += 120; steps--; }
-        if (steps == 0) return;
+        if (steps == 0 || !IsActive) return;
 
-        var next = _index + steps;
-        if (next >= _segments.Count)
+        if (steps > 0 && _pendingSteps == 0 && _index == _segments.Count - 1)
         {
-            End();
+            if (DateTime.UtcNow - _lastAdvanceAt >= EndConfirmDelay) End();
             return;
         }
-        _index = Math.Max(0, next);
-        _overlay?.SetSegment(_segments[_index], _index, _segments.Count);
+
+        _pendingSteps = Math.Clamp(_pendingSteps + steps, -MaxPendingSteps, MaxPendingSteps);
+        Pump();
+    }
+
+    private void Pump()
+    {
+        if (_pendingSteps != 0 && DateTime.UtcNow - _lastAdvanceAt >= MinDisplayTime)
+            ApplyOneStep();
+
+        if (_pendingSteps != 0)
+        {
+            _pumpTimer ??= CreatePumpTimer();
+            if (!_pumpTimer.IsEnabled) _pumpTimer.Start();
+        }
+        else
+        {
+            _pumpTimer?.Stop();
+        }
+    }
+
+    private DispatcherTimer CreatePumpTimer()
+    {
+        var timer = new DispatcherTimer { Interval = MinDisplayTime };
+        timer.Tick += (_, _) =>
+        {
+            if (_pendingSteps != 0) ApplyOneStep();
+            if (_pendingSteps == 0) timer.Stop();
+        };
+        return timer;
+    }
+
+    private void ApplyOneStep()
+    {
+        var sign = Math.Sign(_pendingSteps);
+        _pendingSteps -= sign;
+        var next = _index + sign;
+        if (next < 0 || next >= _segments.Count)
+        {
+            // Hitting either edge absorbs whatever is left of the burst.
+            _pendingSteps = 0;
+            return;
+        }
+
+        var revisit = next < _maxIndexReached;
+        _index = next;
+        _maxIndexReached = Math.Max(_maxIndexReached, next);
+        _lastAdvanceAt = DateTime.UtcNow;
+        _overlay?.SetSegment(_segments[next], next, _segments.Count, revisit);
     }
 
     public void End()
     {
         if (_ended) return;
+        _pumpTimer?.Stop();
+        _pumpTimer = null;
         _mouse?.Dispose();
         _mouse = null;
         _keyboard?.Dispose();
