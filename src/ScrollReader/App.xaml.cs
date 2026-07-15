@@ -82,6 +82,7 @@ public partial class App : System.Windows.Application
         _startMenuItem = new WinForms.ToolStripMenuItem("読書モード開始", null, (_, _) => ToggleSession());
         menu.Items.Add(_startMenuItem);
         menu.Items.Add("設定を開く", null, (_, _) => OpenSettingsFile());
+        menu.Items.Add("設定フォルダを開く", null, (_, _) => OpenSettingsFolder());
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add("終了", null, (_, _) => ExitApp());
 
@@ -105,6 +106,13 @@ public partial class App : System.Windows.Application
         {
             Process.Start("explorer.exe", $"/select,\"{_settings!.FilePath}\"");
         }
+    }
+
+    private void OpenSettingsFolder()
+    {
+        // Explorer /select opens the (hidden) AppData folder and highlights
+        // the file regardless of the "show hidden items" setting.
+        Process.Start("explorer.exe", $"/select,\"{_settings!.FilePath}\"");
     }
 
     private void ToggleSession()
