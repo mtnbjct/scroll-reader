@@ -30,6 +30,9 @@ public sealed class Settings
     /// <summary>Japanese tokenizer: "mecab" (NMeCab + IPA dictionary) or "os" (Windows WordsSegmenter).</summary>
     public string Segmenter { get; set; } = "mecab";
 
+    /// <summary>Cruise display-time change per character away from the reference length (0 disables).</summary>
+    public double LengthWeight { get; set; } = 0.05;
+
     /// <summary>Process names (with or without .exe) where the hotkey is ignored.</summary>
     public string[] BlockedProcesses { get; set; } = Array.Empty<string>();
 
@@ -55,6 +58,7 @@ public sealed class Settings
         MaxSegmentLength = Math.Clamp(MaxSegmentLength, 4, 20),
         OrpEnabled = OrpEnabled,
         Segmenter = string.Equals(Segmenter?.Trim(), "os", StringComparison.OrdinalIgnoreCase) ? "os" : "mecab",
+        LengthWeight = double.IsFinite(LengthWeight) ? Math.Clamp(LengthWeight, 0, 0.3) : 0.05,
         BlockedProcesses = (BlockedProcesses ?? Array.Empty<string>())
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .Select(p => p.Trim())

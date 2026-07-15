@@ -27,6 +27,10 @@ internal sealed class SettingsStore : IDisposable
           // 1段加速するごとに25%速くなり、minDisplayMs が上限速度
           "cruiseBaseMs": 350,
 
+          // 文字数に応じた表示時間の増減（1文字あたりの割合）。
+          // 基準4文字より長いほどゆっくり、短いほど速く。0 で無効、最大 0.3
+          "lengthWeight": 0.05,
+
           // 日本語の表示単位の最大文字数。これを超える結合をしない（トークン自体が長い場合は超えることあり）
           "maxSegmentLength": 7,
 

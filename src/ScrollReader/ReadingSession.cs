@@ -51,6 +51,7 @@ internal sealed class ReadingSession
     private readonly int _maxSegmentLength;
     private readonly bool _orpEnabled;
     private readonly string _segmenterEngine;
+    private readonly double _lengthWeight;
 
     private IReadOnlyList<string> _segments = Array.Empty<string>();
     private int[]? _orpIndices;
@@ -85,22 +86,27 @@ internal sealed class ReadingSession
         _maxSegmentLength = settings.MaxSegmentLength;
         _orpEnabled = settings.OrpEnabled;
         _segmenterEngine = settings.Segmenter;
+        _lengthWeight = settings.LengthWeight;
     }
 
     internal static double CruiseIntervalMs(double baseMs, double floorMs, int level) =>
         Math.Max(floorMs, baseMs * Math.Pow(CruiseAccel, level - 1));
 
+    /// <summary>Segment length at which the length factor is exactly 1.0.</summary>
+    internal const int ReferenceLength = 4;
+
     /// <summary>
-    /// Auto-advance dwells longer on natural pauses, mimicking reading
-    /// rhythm: sentence ends 1.7x, clause ends 1.35x, long units 1.15x.
+    /// Auto-advance display time mimics reading rhythm: proportional to
+    /// segment length (lengthWeight per character around the reference
+    /// length, clamped to 0.6–2.0x), times pause multipliers for sentence
+    /// ends (1.7x) and clause ends (1.35x).
     /// </summary>
-    internal static double DisplayWeight(string segment)
+    internal static double DisplayWeight(string segment, double lengthWeight)
     {
-        var weight = 1.0;
+        var weight = Math.Clamp(1 + lengthWeight * (segment.Length - ReferenceLength), 0.6, 2.0);
         var last = segment[^1];
         if (last is '。' or '！' or '？' or '!' or '?' or '…' or '.') weight *= 1.7;
         else if (last is '、' or ',' or '，') weight *= 1.35;
-        if (segment.Length >= 7) weight *= 1.15;
         return weight;
     }
 
@@ -250,7 +256,7 @@ internal sealed class ReadingSession
     private void ApplyCruiseInterval()
     {
         var baseMs = CruiseIntervalMs(_cruiseBaseMs, _minDisplayTime.TotalMilliseconds, _cruiseLevel);
-        _cruiseTimer!.Interval = TimeSpan.FromMilliseconds(baseMs * DisplayWeight(_segments[_index]));
+        _cruiseTimer!.Interval = TimeSpan.FromMilliseconds(baseMs * DisplayWeight(_segments[_index], _lengthWeight));
     }
 
     private void StopCruise()

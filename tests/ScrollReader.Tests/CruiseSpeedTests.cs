@@ -47,17 +47,38 @@ public class CruiseSpeedTests
     [Fact]
     public void SentenceEndsDwellLongerThanClauseEndsThanPlain()
     {
-        var plain = ReadingSession.DisplayWeight("読んだ");
-        var clause = ReadingSession.DisplayWeight("読んで、");
-        var sentence = ReadingSession.DisplayWeight("読んだ。");
+        var plain = ReadingSession.DisplayWeight("読んだ", 0.05);
+        var clause = ReadingSession.DisplayWeight("読んで、", 0.05);
+        var sentence = ReadingSession.DisplayWeight("読んだ。", 0.05);
         Assert.True(plain < clause);
         Assert.True(clause < sentence);
     }
 
     [Fact]
-    public void LongSegmentsGetASmallBoost()
+    public void DisplayTimeScalesWithLength()
     {
-        Assert.True(ReadingSession.DisplayWeight("一週間ほど腰を") > ReadingSession.DisplayWeight("時から"));
-        Assert.True(ReadingSession.DisplayWeight("reading") > ReadingSession.DisplayWeight("dog"));
+        var w2 = ReadingSession.DisplayWeight("時に", 0.05);
+        var w4 = ReadingSession.DisplayWeight("親譲りの", 0.05);
+        var w7 = ReadingSession.DisplayWeight("一週間ほど腰を", 0.05);
+        Assert.True(w2 < w4);
+        Assert.True(w4 < w7);
+        Assert.Equal(1.0, w4); // reference length 4 is neutral
+        Assert.Equal(1.15, w7, 3);
+        Assert.Equal(0.9, w2, 3);
+    }
+
+    [Fact]
+    public void ZeroLengthWeightIsLengthNeutral()
+    {
+        Assert.Equal(
+            ReadingSession.DisplayWeight("時に", 0),
+            ReadingSession.DisplayWeight("一週間ほど腰を", 0));
+    }
+
+    [Fact]
+    public void LengthFactorIsClamped()
+    {
+        var veryLong = new string('あ', 60);
+        Assert.Equal(2.0, ReadingSession.DisplayWeight(veryLong, 0.3));
     }
 }

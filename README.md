@@ -36,6 +36,7 @@ Right-click the tray icon → "設定を開く" (open settings), or edit `%AppDa
   "hotkey": "Ctrl+Alt+R",     // also e.g. "Ctrl+MiddleClick"
   "wheelMode": "cruise",      // "cruise" or "step"
   "cruiseBaseMs": 350,        // slowest cruise speed (ms per unit)
+  "lengthWeight": 0.05,       // cruise time scaling per character (0 = off)
   "maxSegmentLength": 7,      // max characters per Japanese unit
   "segmenter": "mecab",       // "mecab" (bundled dic) or "os" (lightweight)
   "minDisplayMs": 120,        // minimum display time = top speed
