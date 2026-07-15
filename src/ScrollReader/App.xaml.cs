@@ -11,6 +11,8 @@ public partial class App : System.Windows.Application
     private WinForms.NotifyIcon? _trayIcon;
     private WinForms.ToolStripMenuItem? _startMenuItem;
     private HotkeyManager? _hotkey;
+    private MiddleClickActivator? _middleClickActivator;
+    private bool _middleClickActivation;
     private SettingsStore? _settings;
     private ReadingSession? _session;
 
@@ -44,15 +46,26 @@ public partial class App : System.Windows.Application
     private void ApplyHotkey()
     {
         var spec = _settings!.Current.Hotkey;
-        if (!HotkeyParser.TryParse(spec, out var modifiers, out var vk))
+        if (!HotkeyParser.TryParse(spec, out var hotkey))
         {
             _trayIcon?.ShowBalloonTip(3000, "Scroll Reader",
                 $"ホットキー \"{spec}\" を解釈できません。Ctrl+Alt+R を使用します。", WinForms.ToolTipIcon.Warning);
             spec = "Ctrl+Alt+R";
-            HotkeyParser.TryParse(spec, out modifiers, out vk);
+            HotkeyParser.TryParse(spec, out hotkey);
         }
 
-        if (!_hotkey!.Register(modifiers, vk))
+        _middleClickActivator?.Dispose();
+        _middleClickActivator = null;
+        _hotkey!.Unregister();
+        _middleClickActivation = hotkey.IsMiddleClick;
+
+        if (hotkey.IsMiddleClick)
+        {
+            _middleClickActivator = new MiddleClickActivator(hotkey.Modifiers);
+            _middleClickActivator.Triggered += ToggleSession;
+            _middleClickActivator.Install();
+        }
+        else if (!_hotkey.Register(hotkey.Modifiers, hotkey.Vk))
         {
             _trayIcon?.ShowBalloonTip(3000, "Scroll Reader",
                 $"ホットキー {spec} を登録できませんでした。他のアプリが使用中の可能性があります。",
@@ -112,7 +125,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _session = new ReadingSession(settings);
+        _session = new ReadingSession(settings, _middleClickActivation);
         _session.Ended += () => _session = null;
         _session.Start();
     }
@@ -142,6 +155,7 @@ public partial class App : System.Windows.Application
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
         }
+        _middleClickActivator?.Dispose();
         _hotkey?.Dispose();
         _settings?.Dispose();
         Shutdown();

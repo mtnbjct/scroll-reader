@@ -14,12 +14,23 @@ internal sealed class SettingsStore : IDisposable
     private const string DefaultTemplate = """
         {
           // 読書モード開始のホットキー。例: "Ctrl+Alt+R", "Ctrl+Shift+Space", "F9"
+          // マウス派は "Ctrl+MiddleClick"（Ctrl+ホイールクリック）も指定可。
+          // 素の "MiddleClick" も可能だが、ブラウザの中クリック等と競合しやすいので注意
           "hotkey": "Ctrl+Alt+R",
+
+          // ホイール下回転の挙動:
+          //   "cruise": 自動送り。下に回すほど加速、上に回すと減速→停止→コマ送り巻き戻し
+          //   "step":   1ノッチ = 1文節
+          "wheelMode": "cruise",
+
+          // クルーズ最低速（レベル1）の1文節あたりの時間（ミリ秒）。
+          // 1段加速するごとに25%速くなり、minDisplayMs が上限速度
+          "cruiseBaseMs": 350,
 
           // 1文節（単語）の最短表示時間（ミリ秒）。大きいほどゆっくり流れる
           "minDisplayMs": 120,
 
-          // ホイールを勢いよく回したときに先読みされる最大ステップ数
+          // ホイールを勢いよく回したときに先読みされる最大ステップ数（stepモード・巻き戻し）
           "maxPendingSteps": 5,
 
           // 拡大テキストのフォントサイズ

@@ -29,13 +29,18 @@ internal sealed class HotkeyManager : IDisposable
     /// <summary>Registers the hotkey, replacing any previous registration.</summary>
     public bool Register(uint modifiers, uint vk)
     {
+        Unregister();
+        _registered = NativeMethods.RegisterHotKey(_source.Handle, HotkeyId, modifiers | NativeMethods.MOD_NOREPEAT, vk);
+        return _registered;
+    }
+
+    public void Unregister()
+    {
         if (_registered)
         {
             NativeMethods.UnregisterHotKey(_source.Handle, HotkeyId);
             _registered = false;
         }
-        _registered = NativeMethods.RegisterHotKey(_source.Handle, HotkeyId, modifiers | NativeMethods.MOD_NOREPEAT, vk);
-        return _registered;
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)

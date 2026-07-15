@@ -14,6 +14,7 @@ internal static class NativeMethods
     public const int WM_LBUTTONDOWN = 0x0201;
     public const int WM_RBUTTONDOWN = 0x0204;
     public const int WM_MBUTTONDOWN = 0x0207;
+    public const int WM_MBUTTONUP = 0x0208;
     public const int WM_MOUSEWHEEL = 0x020A;
     public const int WM_HOTKEY = 0x0312;
 
@@ -68,6 +69,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern uint GetClipboardSequenceNumber();
+
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int vKey);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);

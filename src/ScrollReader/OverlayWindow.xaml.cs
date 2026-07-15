@@ -50,13 +50,14 @@ public partial class OverlayWindow : Window
 
     public void SetFontSize(double size) => SegmentText.FontSize = size;
 
-    public void SetSegment(string text, int index, int total, bool revisit)
+    public void SetSegment(string text, int index, int total, bool revisit, int cruiseLevel = 0)
     {
         SegmentText.Text = text;
         SegmentText.Foreground = revisit ? RevisitBrush : CurrentBrush;
-        ProgressText.Text = index == total - 1
+        var position = index == total - 1
             ? $"{total} / {total} ・ もう一度下で終了"
             : $"{index + 1} / {total}";
+        ProgressText.Text = cruiseLevel > 0 ? $"▶{cruiseLevel}  {position}" : position;
         _progress = total > 0 ? (index + 1) / (double)total : 0;
         UpdateProgressFill();
     }

@@ -9,11 +9,19 @@ namespace ScrollReader.Native;
 /// </summary>
 internal sealed class MouseHook : IDisposable
 {
+    private readonly bool _abortOnMiddleClick;
     private IntPtr _hook;
     private NativeMethods.LowLevelProc? _proc;
 
     public event Action<int>? Wheel;
     public event Action? ButtonDown;
+
+    /// <param name="abortOnMiddleClick">
+    /// False when middle-click is the activation hotkey: the click must pass
+    /// through to the activator hook (which handles ending the session)
+    /// instead of counting as a plain abort click.
+    /// </param>
+    public MouseHook(bool abortOnMiddleClick = true) => _abortOnMiddleClick = abortOnMiddleClick;
 
     public void Install()
     {
@@ -37,7 +45,9 @@ internal sealed class MouseHook : IDisposable
                     return 1;
                 case NativeMethods.WM_LBUTTONDOWN:
                 case NativeMethods.WM_RBUTTONDOWN:
-                case NativeMethods.WM_MBUTTONDOWN:
+                    ButtonDown?.Invoke();
+                    break;
+                case NativeMethods.WM_MBUTTONDOWN when _abortOnMiddleClick:
                     ButtonDown?.Invoke();
                     break;
             }

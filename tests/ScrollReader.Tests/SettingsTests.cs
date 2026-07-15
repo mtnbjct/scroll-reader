@@ -62,6 +62,20 @@ public class SettingsTests
         Assert.Equal(120, s.MinDisplayMs);
         Assert.Equal(5, s.MaxPendingSteps);
         Assert.Equal(44, s.FontSize);
+        Assert.Equal("cruise", s.WheelMode);
+        Assert.Equal(350, s.CruiseBaseMs);
         Assert.Empty(s.BlockedProcesses);
+    }
+
+    [Theory]
+    [InlineData("step", "step")]
+    [InlineData("STEP", "step")]
+    [InlineData("cruise", "cruise")]
+    [InlineData("typo", "cruise")]
+    [InlineData(null, "cruise")]
+    public void WheelModeNormalizes(string? input, string expected)
+    {
+        var s = new Settings { WheelMode = input! }.Sanitized();
+        Assert.Equal(expected, s.WheelMode);
     }
 }

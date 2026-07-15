@@ -15,6 +15,12 @@ public sealed class Settings
 
     public double FontSize { get; set; } = 44;
 
+    /// <summary>"cruise" (wheel down = speed up, wheel up = slow down/rewind) or "step" (one notch = one segment).</summary>
+    public string WheelMode { get; set; } = "cruise";
+
+    /// <summary>Cruise interval at speed level 1, in milliseconds; each level is 25% faster, floored at MinDisplayMs.</summary>
+    public int CruiseBaseMs { get; set; } = 350;
+
     /// <summary>Process names (with or without .exe) where the hotkey is ignored.</summary>
     public string[] BlockedProcesses { get; set; } = Array.Empty<string>();
 
@@ -35,6 +41,8 @@ public sealed class Settings
         MinDisplayMs = Math.Clamp(MinDisplayMs, 30, 2000),
         MaxPendingSteps = Math.Clamp(MaxPendingSteps, 1, 50),
         FontSize = double.IsFinite(FontSize) ? Math.Clamp(FontSize, 12, 200) : 44,
+        WheelMode = string.Equals(WheelMode?.Trim(), "step", StringComparison.OrdinalIgnoreCase) ? "step" : "cruise",
+        CruiseBaseMs = Math.Clamp(CruiseBaseMs, 100, 3000),
         BlockedProcesses = (BlockedProcesses ?? Array.Empty<string>())
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .Select(p => p.Trim())
