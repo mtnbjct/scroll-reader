@@ -24,6 +24,18 @@ public class SettingsStoreTests
     }
 
     [Fact]
+    public void EveryTemplateEntryDocumentsItsDefault()
+    {
+        var template = SettingsStore.BuildTemplate();
+        Assert.Contains("// デフォルト: 0.05", template);       // lengthWeight
+        Assert.Contains("// デフォルト: \"Ctrl+Alt+R\"", template);
+        // 1 default comment per key
+        var keys = template.Split('\n').Count(l => l.TrimStart().StartsWith("\""));
+        var defaultComments = template.Split('\n').Count(l => l.Contains("// デフォルト: "));
+        Assert.Equal(keys, defaultComments);
+    }
+
+    [Fact]
     public void AddMissingKeysPreservesCustomValues()
     {
         const string json = """

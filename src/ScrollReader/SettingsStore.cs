@@ -185,6 +185,7 @@ internal sealed class SettingsStore : IDisposable
     private static void AppendEntry(StringBuilder sb, (string Key, string ValueJson, string[] Comments) entry)
     {
         foreach (var line in entry.Comments) sb.Append("  // ").Append(line).Append('\n');
+        sb.Append("  // デフォルト: ").Append(entry.ValueJson).Append('\n');
         sb.Append("  \"").Append(entry.Key).Append("\": ").Append(entry.ValueJson).Append(",\n");
     }
 
