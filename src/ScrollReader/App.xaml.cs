@@ -83,17 +83,41 @@ public partial class App : System.Windows.Application
         menu.Items.Add(_startMenuItem);
         menu.Items.Add("設定を開く", null, (_, _) => OpenSettingsFile());
         menu.Items.Add("設定フォルダを開く", null, (_, _) => OpenSettingsFolder());
+        var autoStartItem = new WinForms.ToolStripMenuItem("サインイン時に自動起動")
+        {
+            CheckOnClick = true,
+            Checked = AutoStart.IsEnabled(),
+        };
+        autoStartItem.CheckedChanged += (_, _) => AutoStart.SetEnabled(autoStartItem.Checked);
+        menu.Items.Add(autoStartItem);
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add("終了", null, (_, _) => ExitApp());
 
         _trayIcon = new WinForms.NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = LoadAppIcon(),
             Text = "Scroll Reader",
             Visible = true,
             ContextMenuStrip = menu,
         };
         _trayIcon.DoubleClick += (_, _) => ToggleSession();
+    }
+
+    private static System.Drawing.Icon LoadAppIcon()
+    {
+        try
+        {
+            if (Environment.ProcessPath is { } exe &&
+                System.Drawing.Icon.ExtractAssociatedIcon(exe) is { } icon)
+            {
+                return icon;
+            }
+        }
+        catch
+        {
+            // fall through to the generic icon
+        }
+        return System.Drawing.SystemIcons.Application;
     }
 
     private void OpenSettingsFile()

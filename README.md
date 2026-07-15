@@ -57,7 +57,6 @@ dotnet publish src/ScrollReader -c Release -o publish   # 配布用ビルド
 
 ## ロードマップ
 
-- [ ] 設定 GUI
 - [ ] macOS / Linux 対応
 
 ## ライセンス

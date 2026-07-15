@@ -43,4 +43,21 @@ public class CruiseSpeedTests
     {
         Assert.Equal(ReadingSession.CruiseLevelCap, ReadingSession.ComputeMaxCruiseLevel(3000, 1));
     }
+
+    [Fact]
+    public void SentenceEndsDwellLongerThanClauseEndsThanPlain()
+    {
+        var plain = ReadingSession.DisplayWeight("読んだ");
+        var clause = ReadingSession.DisplayWeight("読んで、");
+        var sentence = ReadingSession.DisplayWeight("読んだ。");
+        Assert.True(plain < clause);
+        Assert.True(clause < sentence);
+    }
+
+    [Fact]
+    public void LongSegmentsGetASmallBoost()
+    {
+        Assert.True(ReadingSession.DisplayWeight("一週間ほど腰を") > ReadingSession.DisplayWeight("時から"));
+        Assert.True(ReadingSession.DisplayWeight("reading") > ReadingSession.DisplayWeight("dog"));
+    }
 }

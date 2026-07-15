@@ -88,6 +88,20 @@ internal sealed class ReadingSession
     internal static double CruiseIntervalMs(double baseMs, double floorMs, int level) =>
         Math.Max(floorMs, baseMs * Math.Pow(CruiseAccel, level - 1));
 
+    /// <summary>
+    /// Auto-advance dwells longer on natural pauses, mimicking reading
+    /// rhythm: sentence ends 1.7x, clause ends 1.35x, long units 1.15x.
+    /// </summary>
+    internal static double DisplayWeight(string segment)
+    {
+        var weight = 1.0;
+        var last = segment[^1];
+        if (last is '。' or '！' or '？' or '!' or '?' or '…' or '.') weight *= 1.7;
+        else if (last is '、' or ',' or '，') weight *= 1.35;
+        if (segment.Length >= 7) weight *= 1.15;
+        return weight;
+    }
+
     internal static int ComputeMaxCruiseLevel(double baseMs, double floorMs)
     {
         var level = 1;
@@ -201,8 +215,7 @@ internal sealed class ReadingSession
     private void RunCruise(bool immediateFirstStep)
     {
         _cruiseTimer ??= CreateCruiseTimer();
-        _cruiseTimer.Interval = TimeSpan.FromMilliseconds(
-            CruiseIntervalMs(_cruiseBaseMs, _minDisplayTime.TotalMilliseconds, _cruiseLevel));
+        ApplyCruiseInterval();
         if (immediateFirstStep && DateTime.UtcNow - _lastAdvanceAt >= _minDisplayTime) CruiseTick();
         if (_cruiseLevel > 0)
         {
@@ -227,6 +240,13 @@ internal sealed class ReadingSession
         }
         MoveTo(_index + 1);
         if (_index >= _segments.Count - 1) StopCruise();
+        else ApplyCruiseInterval(); // dwell longer on punctuation and long units
+    }
+
+    private void ApplyCruiseInterval()
+    {
+        var baseMs = CruiseIntervalMs(_cruiseBaseMs, _minDisplayTime.TotalMilliseconds, _cruiseLevel);
+        _cruiseTimer!.Interval = TimeSpan.FromMilliseconds(baseMs * DisplayWeight(_segments[_index]));
     }
 
     private void StopCruise()

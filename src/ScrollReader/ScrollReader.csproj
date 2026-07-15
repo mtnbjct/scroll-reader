@@ -9,6 +9,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>ScrollReader</AssemblyName>
     <RootNamespace>ScrollReader</RootNamespace>
     <Version>0.1.0</Version>
