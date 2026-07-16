@@ -51,6 +51,13 @@ public partial class OverlayWindow : Window
         Reposition();
     }
 
+    /// <summary>Re-anchors the visible overlay (Alt+mouse-move repositioning).</summary>
+    public void MoveAnchorTo(System.Drawing.Point cursorPx)
+    {
+        _anchor = cursorPx;
+        Reposition();
+    }
+
     public void SetFontSize(double size)
     {
         SegmentText.FontSize = size;

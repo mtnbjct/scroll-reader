@@ -15,6 +15,7 @@ internal sealed class MouseHook : IDisposable
 
     public event Action<int>? Wheel;
     public event Action? ButtonDown;
+    public event Action<int, int>? MouseMoved;
 
     /// <param name="abortOnMiddleClick">
     /// False when middle-click is the activation hotkey: the click must pass
@@ -49,6 +50,10 @@ internal sealed class MouseHook : IDisposable
                     break;
                 case NativeMethods.WM_MBUTTONDOWN when _abortOnMiddleClick:
                     ButtonDown?.Invoke();
+                    break;
+                case NativeMethods.WM_MOUSEMOVE:
+                    var move = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
+                    MouseMoved?.Invoke(move.pt.X, move.pt.Y);
                     break;
             }
         }

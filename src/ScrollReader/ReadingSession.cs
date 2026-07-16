@@ -4,17 +4,24 @@ using ScrollReader.Segmentation;
 
 namespace ScrollReader;
 
+/// <summary>Where the previous session left off, for resuming without a selection.</summary>
+internal sealed record ResumeState(string Text, int CharOffset);
+
 /// <summary>
-/// One reading session: captures the selection, shows the overlay, and steps
-/// through segments as the wheel turns. Esc, a click, or any key press ends it.
+/// One reading session: captures the selection (or resumes the previous
+/// text), shows the overlay, and steps through segments as the wheel turns.
+/// Esc, a click, or any non-modifier key press ends it.
 ///
-/// Two wheel modes:
+/// Two wheel modes, with Ctrl temporarily switching to the other one:
 /// - cruise (default): wheel down starts auto-advance and each further notch
 ///   speeds it up one level (throttle); wheel up slows down one level, stops
 ///   at level 0, and — after a short grace — steps backward notch by notch.
+///   The cruise level is remembered across mode switches.
 /// - step: one notch = one segment. Input is buffered and paced (min display
-///   time per segment, bounded queue) so a burst plays back readably instead
-///   of skipping words.
+///   time per segment, bounded queue) so a burst of notches plays back
+///   readably instead of skipping words.
+///
+/// Holding Alt while moving the mouse re-anchors the overlay.
 /// </summary>
 internal sealed class ReadingSession
 {
@@ -36,22 +43,25 @@ internal sealed class ReadingSession
     /// </summary>
     private static readonly TimeSpan KeyGracePeriod = TimeSpan.FromMilliseconds(600);
 
-    /// <summary>Per-level speed-up factor for cruise intervals.</summary>
-    internal const double CruiseAccel = 0.75;
-
     internal const int CruiseLevelCap = 12;
+
+    /// <summary>Segment length at which the length factor is exactly 1.0.</summary>
+    internal const int ReferenceLength = 4;
 
     private readonly TimeSpan _minDisplayTime;
     private readonly int _maxPendingSteps;
     private readonly double _fontSize;
     private readonly bool _cruiseMode;
     private readonly double _cruiseBaseMs;
+    private readonly double _cruiseAccel;
     private readonly int _maxCruiseLevel;
     private readonly bool _abortOnMiddleClick;
     private readonly int _maxSegmentLength;
     private readonly bool _orpEnabled;
     private readonly string _segmenterEngine;
     private readonly double _lengthWeight;
+    private readonly bool _showStats;
+    private readonly ResumeState? _resume;
 
     private IReadOnlyList<string> _segments = Array.Empty<string>();
     private int[]? _orpIndices;
@@ -65,6 +75,9 @@ internal sealed class ReadingSession
     private int _wheelAccumulator;
     private int _pendingSteps;
     private int _cruiseLevel;
+    private int _savedCruiseLevel;
+    private bool _modifierHeld;
+    private bool _ctrlDownAtStart;
     private DateTime _startedAt;
     private DateTime _lastAdvanceAt;
     private DateTime _pausedAt;
@@ -72,28 +85,44 @@ internal sealed class ReadingSession
 
     public bool IsActive { get; private set; }
 
+    /// <summary>The text this session displayed (captured or resumed); null if nothing was shown.</summary>
+    public string? SourceText { get; private set; }
+
+    /// <summary>Character offset of the segment shown when the session ended.</summary>
+    public int LastCharOffset { get; private set; }
+
     public event Action? Ended;
 
-    public ReadingSession(Settings settings, bool middleClickActivation)
+    public ReadingSession(Settings settings, bool middleClickActivation, ResumeState? resume = null)
     {
         _minDisplayTime = TimeSpan.FromMilliseconds(settings.MinDisplayMs);
         _maxPendingSteps = settings.MaxPendingSteps;
         _fontSize = settings.FontSize;
         _cruiseMode = settings.WheelMode != "step";
         _cruiseBaseMs = settings.CruiseBaseMs;
-        _maxCruiseLevel = ComputeMaxCruiseLevel(_cruiseBaseMs, settings.MinDisplayMs);
+        _cruiseAccel = 1 - settings.CruiseAccelPercent / 100.0;
+        _maxCruiseLevel = ComputeMaxCruiseLevel(_cruiseBaseMs, settings.MinDisplayMs, _cruiseAccel);
         _abortOnMiddleClick = !middleClickActivation;
         _maxSegmentLength = settings.MaxSegmentLength;
         _orpEnabled = settings.OrpEnabled;
         _segmenterEngine = settings.Segmenter;
         _lengthWeight = settings.LengthWeight;
+        _showStats = settings.ShowStats;
+        _resume = resume;
     }
 
-    internal static double CruiseIntervalMs(double baseMs, double floorMs, int level) =>
-        Math.Max(floorMs, baseMs * Math.Pow(CruiseAccel, level - 1));
+    /// <summary>Cruise switches to step while Ctrl is held, and vice versa.</summary>
+    private bool EffectiveCruise => _cruiseMode ^ _modifierHeld;
 
-    /// <summary>Segment length at which the length factor is exactly 1.0.</summary>
-    internal const int ReferenceLength = 4;
+    internal static double CruiseIntervalMs(double baseMs, double floorMs, int level, double accel) =>
+        Math.Max(floorMs, baseMs * Math.Pow(accel, level - 1));
+
+    internal static int ComputeMaxCruiseLevel(double baseMs, double floorMs, double accel)
+    {
+        var level = 1;
+        while (level < CruiseLevelCap && CruiseIntervalMs(baseMs, floorMs, level, accel) > floorMs) level++;
+        return level;
+    }
 
     /// <summary>
     /// Auto-advance display time mimics reading rhythm: proportional to
@@ -110,11 +139,16 @@ internal sealed class ReadingSession
         return weight;
     }
 
-    internal static int ComputeMaxCruiseLevel(double baseMs, double floorMs)
+    /// <summary>Index of the segment containing the given character offset.</summary>
+    internal static int FindSegmentIndex(IReadOnlyList<string> segments, int charOffset)
     {
-        var level = 1;
-        while (level < CruiseLevelCap && CruiseIntervalMs(baseMs, floorMs, level) > floorMs) level++;
-        return level;
+        var cumulative = 0;
+        for (var i = 0; i < segments.Count; i++)
+        {
+            if (charOffset < cumulative + segments[i].Length) return i;
+            cumulative += segments[i].Length;
+        }
+        return Math.Max(0, segments.Count - 1);
     }
 
     public void Start()
@@ -123,6 +157,12 @@ internal sealed class ReadingSession
         var cursor = new System.Drawing.Point(pt.X, pt.Y);
 
         var text = TextCapture.CaptureSelection();
+        var resumed = false;
+        if (string.IsNullOrWhiteSpace(text) && _resume is not null)
+        {
+            text = _resume.Text;
+            resumed = true;
+        }
         var segments = text is null
             ? Array.Empty<string>()
             : Segmenter.Segment(text, _maxSegmentLength, _segmenterEngine);
@@ -133,11 +173,18 @@ internal sealed class ReadingSession
             return;
         }
 
+        SourceText = text;
         _segments = segments;
+        if (resumed)
+        {
+            _index = FindSegmentIndex(segments, _resume!.CharOffset);
+            _maxIndexReached = _index;
+        }
         IsActive = true;
         _startedAt = DateTime.UtcNow;
         _lastAdvanceAt = _startedAt;
         _pausedAt = _startedAt;
+        _ctrlDownAtStart = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_CONTROL) & 0x8000) != 0;
 
         _overlay = new OverlayWindow();
         _overlay.SetFontSize(_fontSize);
@@ -160,6 +207,7 @@ internal sealed class ReadingSession
         _mouse = new MouseHook(_abortOnMiddleClick);
         _mouse.Wheel += OnWheel;
         _mouse.ButtonDown += End;
+        _mouse.MouseMoved += OnMouseMoved;
         _mouse.Install();
 
         _keyboard = new KeyboardHook();
@@ -168,6 +216,8 @@ internal sealed class ReadingSession
         {
             if (DateTime.UtcNow - _startedAt >= KeyGracePeriod) End();
         };
+        _keyboard.CtrlDown += OnCtrlDown;
+        _keyboard.CtrlUp += OnCtrlUp;
         _keyboard.Install();
     }
 
@@ -181,8 +231,62 @@ internal sealed class ReadingSession
         while (_wheelAccumulator <= -120) { _wheelAccumulator += 120; steps--; }
         if (steps == 0 || !IsActive) return;
 
-        if (_cruiseMode) HandleCruiseInput(steps);
+        if (EffectiveCruise) HandleCruiseInput(steps);
         else HandleStepInput(steps);
+    }
+
+    // ---- temporary mode switch (Ctrl held) --------------------------------
+
+    private void OnCtrlDown()
+    {
+        // Ctrl still held from the activation hotkey (and its key-repeat)
+        // must not switch modes; wait for a release first.
+        if (_ctrlDownAtStart || _modifierHeld || !IsActive) return;
+        _modifierHeld = true;
+        SwitchEffectiveMode();
+    }
+
+    private void OnCtrlUp()
+    {
+        if (_ctrlDownAtStart)
+        {
+            _ctrlDownAtStart = false;
+            return;
+        }
+        if (!_modifierHeld || !IsActive) return;
+        _modifierHeld = false;
+        SwitchEffectiveMode();
+    }
+
+    private void SwitchEffectiveMode()
+    {
+        if (EffectiveCruise)
+        {
+            // Entering cruise: resume at the remembered speed.
+            _pendingSteps = 0;
+            _pumpTimer?.Stop();
+            _cruiseLevel = Math.Min(_savedCruiseLevel, _maxCruiseLevel);
+            if (_cruiseLevel > 0) RunCruise(immediateFirstStep: false);
+            else UpdateOverlay();
+        }
+        else
+        {
+            // Leaving cruise: remember the speed and stop.
+            _savedCruiseLevel = _cruiseLevel;
+            _cruiseTimer?.Stop();
+            _cruiseLevel = 0;
+            _pausedAt = DateTime.UtcNow;
+            UpdateOverlay();
+        }
+    }
+
+    // ---- overlay repositioning (Alt held) ---------------------------------
+
+    private void OnMouseMoved(int x, int y)
+    {
+        if (!IsActive) return;
+        if ((NativeMethods.GetAsyncKeyState(NativeMethods.VK_MENU) & 0x8000) == 0) return;
+        _overlay?.MoveAnchorTo(new System.Drawing.Point(x, y));
     }
 
     // ---- cruise mode -----------------------------------------------------
@@ -255,7 +359,7 @@ internal sealed class ReadingSession
 
     private void ApplyCruiseInterval()
     {
-        var baseMs = CruiseIntervalMs(_cruiseBaseMs, _minDisplayTime.TotalMilliseconds, _cruiseLevel);
+        var baseMs = CruiseIntervalMs(_cruiseBaseMs, _minDisplayTime.TotalMilliseconds, _cruiseLevel, _cruiseAccel);
         _cruiseTimer!.Interval = TimeSpan.FromMilliseconds(baseMs * DisplayWeight(_segments[_index], _lengthWeight));
     }
 
@@ -350,7 +454,36 @@ internal sealed class ReadingSession
         _keyboard = null;
         _overlay?.Close();
         _overlay = null;
+
+        if (IsActive)
+        {
+            LastCharOffset = _segments.Take(_index).Sum(s => s.Length);
+            MaybeShowStats();
+        }
         Finish();
+    }
+
+    private void MaybeShowStats()
+    {
+        if (!_showStats) return;
+        var duration = DateTime.UtcNow - _startedAt;
+        var unitsRead = _maxIndexReached + 1;
+        if (duration.TotalSeconds < 3 || unitsRead < 6) return;
+
+        string message;
+        if (_orpIndices is not null)
+        {
+            var wpm = unitsRead / duration.TotalMinutes;
+            message = $"{unitsRead:N0} words ・ {wpm:N0} wpm";
+        }
+        else
+        {
+            var charsRead = _segments.Take(unitsRead).Sum(s => s.Length);
+            var cpm = charsRead / duration.TotalMinutes;
+            message = $"{charsRead:N0}字 ・ {cpm:N0}字/分";
+        }
+        NativeMethods.GetCursorPos(out var pt);
+        new OverlayWindow().ShowTransientMessage(message, new System.Drawing.Point(pt.X, pt.Y));
     }
 
     private void Finish()

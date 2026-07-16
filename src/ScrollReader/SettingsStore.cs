@@ -34,8 +34,11 @@ internal sealed class SettingsStore : IDisposable
         }),
         ("cruiseBaseMs", "350", new[]
         {
-            "クルーズ最低速（レベル1）の1文節あたりの時間（ミリ秒）。",
-            "1段加速するごとに25%速くなり、minDisplayMs が上限速度",
+            "クルーズ最低速（レベル1）の1文節あたりの時間（ミリ秒）。minDisplayMs が上限速度",
+        }),
+        ("cruiseAccelPercent", "25", new[]
+        {
+            "クルーズで1段加速するごとに何%速くなるか（5〜50）",
         }),
         ("lengthWeight", "0.05", new[]
         {
@@ -65,6 +68,10 @@ internal sealed class SettingsStore : IDisposable
         ("orpEnabled", "true", new[]
         {
             "英語テキストで ORP（最適認識点）を赤くハイライトし、常に同じ位置に揃える",
+        }),
+        ("showStats", "true", new[]
+        {
+            "セッション終了時に読んだ文字数と速度を一瞬表示する",
         }),
         ("blockedProcesses", "[]", new[]
         {

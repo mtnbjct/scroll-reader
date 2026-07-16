@@ -64,6 +64,8 @@ public class SettingsTests
         Assert.Equal(44, s.FontSize);
         Assert.Equal("cruise", s.WheelMode);
         Assert.Equal(350, s.CruiseBaseMs);
+        Assert.Equal(25, s.CruiseAccelPercent);
+        Assert.True(s.ShowStats);
         Assert.Equal(7, s.MaxSegmentLength);
         Assert.True(s.OrpEnabled);
         Assert.Equal("mecab", s.Segmenter);
@@ -85,6 +87,13 @@ public class SettingsTests
     {
         Assert.Equal(4, new Settings { MaxSegmentLength = 1 }.Sanitized().MaxSegmentLength);
         Assert.Equal(20, new Settings { MaxSegmentLength = 99 }.Sanitized().MaxSegmentLength);
+    }
+
+    [Fact]
+    public void CruiseAccelPercentIsClamped()
+    {
+        Assert.Equal(5, new Settings { CruiseAccelPercent = 0 }.Sanitized().CruiseAccelPercent);
+        Assert.Equal(50, new Settings { CruiseAccelPercent = 90 }.Sanitized().CruiseAccelPercent);
     }
 
     [Theory]

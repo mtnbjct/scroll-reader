@@ -4,10 +4,12 @@ namespace ScrollReader.Tests;
 
 public class CruiseSpeedTests
 {
+    private const double Accel = 0.75; // 25%/level
+
     [Fact]
     public void Level1UsesBaseInterval()
     {
-        Assert.Equal(350, ReadingSession.CruiseIntervalMs(350, 120, 1));
+        Assert.Equal(350, ReadingSession.CruiseIntervalMs(350, 120, 1, Accel));
     }
 
     [Fact]
@@ -16,7 +18,7 @@ public class CruiseSpeedTests
         var previous = double.MaxValue;
         for (var level = 1; level <= 12; level++)
         {
-            var interval = ReadingSession.CruiseIntervalMs(350, 120, level);
+            var interval = ReadingSession.CruiseIntervalMs(350, 120, level, Accel);
             Assert.True(interval <= previous, $"level {level} got slower");
             Assert.True(interval >= 120, $"level {level} went below the floor");
             previous = interval;
@@ -26,22 +28,30 @@ public class CruiseSpeedTests
     [Fact]
     public void MaxLevelIsWhereTheFloorIsReached()
     {
-        var max = ReadingSession.ComputeMaxCruiseLevel(350, 120);
+        var max = ReadingSession.ComputeMaxCruiseLevel(350, 120, Accel);
         Assert.Equal(5, max);
-        Assert.Equal(120, ReadingSession.CruiseIntervalMs(350, 120, max));
-        Assert.True(ReadingSession.CruiseIntervalMs(350, 120, max - 1) > 120);
+        Assert.Equal(120, ReadingSession.CruiseIntervalMs(350, 120, max, Accel));
+        Assert.True(ReadingSession.CruiseIntervalMs(350, 120, max - 1, Accel) > 120);
+    }
+
+    [Fact]
+    public void GentlerAccelYieldsMoreLevels()
+    {
+        var steep = ReadingSession.ComputeMaxCruiseLevel(350, 120, 0.5);  // 50%/level
+        var gentle = ReadingSession.ComputeMaxCruiseLevel(350, 120, 0.95); // 5%/level
+        Assert.True(gentle > steep);
     }
 
     [Fact]
     public void BaseBelowFloorYieldsSingleLevel()
     {
-        Assert.Equal(1, ReadingSession.ComputeMaxCruiseLevel(100, 120));
+        Assert.Equal(1, ReadingSession.ComputeMaxCruiseLevel(100, 120, Accel));
     }
 
     [Fact]
     public void MaxLevelIsCapped()
     {
-        Assert.Equal(ReadingSession.CruiseLevelCap, ReadingSession.ComputeMaxCruiseLevel(3000, 1));
+        Assert.Equal(ReadingSession.CruiseLevelCap, ReadingSession.ComputeMaxCruiseLevel(3000, 1, Accel));
     }
 
     [Fact]

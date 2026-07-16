@@ -1,0 +1,24 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - run: dotnet test -c Release
+      - run: dotnet publish src/ScrollReader -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish
+      - run: Compress-Archive -Path publish/* -DestinationPath ScrollReader-${{ github.ref_name }}-win-x64.zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ScrollReader-*.zip
+          generate_release_notes: true

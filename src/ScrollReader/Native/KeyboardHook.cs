@@ -14,6 +14,8 @@ internal sealed class KeyboardHook : IDisposable
 
     public event Action? EscapePressed;
     public event Action? OtherKeyDown;
+    public event Action? CtrlDown;
+    public event Action? CtrlUp;
 
     public void Install()
     {
@@ -27,21 +29,35 @@ internal sealed class KeyboardHook : IDisposable
 
     private IntPtr Callback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && (int)wParam is NativeMethods.WM_KEYDOWN or NativeMethods.WM_SYSKEYDOWN)
+        if (nCode >= 0)
         {
+            var msg = (int)wParam;
             var info = Marshal.PtrToStructure<NativeMethods.KBDLLHOOKSTRUCT>(lParam);
-            if (info.vkCode == NativeMethods.VK_ESCAPE)
+            var isCtrl = info.vkCode is NativeMethods.VK_CONTROL or 0xA2 or 0xA3; // L/R ctrl
+
+            if (msg is NativeMethods.WM_KEYDOWN or NativeMethods.WM_SYSKEYDOWN)
             {
-                EscapePressed?.Invoke();
-                return 1;
+                if (info.vkCode == NativeMethods.VK_ESCAPE)
+                {
+                    EscapePressed?.Invoke();
+                    return 1;
+                }
+                if (isCtrl)
+                {
+                    CtrlDown?.Invoke();
+                }
+                // Ignore bare modifiers so the user can release Ctrl/Alt from the
+                // activation hotkey without instantly ending the session.
+                else if (info.vkCode is not (NativeMethods.VK_SHIFT or NativeMethods.VK_MENU
+                    or NativeMethods.VK_LWIN or NativeMethods.VK_RWIN)
+                    && info.vkCode is not (>= 0xA0 and <= 0xA5)) // L/R shift, ctrl, alt
+                {
+                    OtherKeyDown?.Invoke();
+                }
             }
-            // Ignore bare modifiers so the user can release Ctrl/Alt from the
-            // activation hotkey without instantly ending the session.
-            if (info.vkCode is not (NativeMethods.VK_SHIFT or NativeMethods.VK_CONTROL or NativeMethods.VK_MENU
-                or NativeMethods.VK_LWIN or NativeMethods.VK_RWIN)
-                && info.vkCode is not (>= 0xA0 and <= 0xA5)) // L/R shift, ctrl, alt
+            else if (msg is NativeMethods.WM_KEYUP or NativeMethods.WM_SYSKEYUP && isCtrl)
             {
-                OtherKeyDown?.Invoke();
+                CtrlUp?.Invoke();
             }
         }
         return NativeMethods.CallNextHookEx(_hook, nCode, wParam, lParam);

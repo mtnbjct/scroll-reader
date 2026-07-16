@@ -18,8 +18,14 @@ public sealed class Settings
     /// <summary>"cruise" (wheel down = speed up, wheel up = slow down/rewind) or "step" (one notch = one segment).</summary>
     public string WheelMode { get; set; } = "cruise";
 
-    /// <summary>Cruise interval at speed level 1, in milliseconds; each level is 25% faster, floored at MinDisplayMs.</summary>
+    /// <summary>Cruise interval at speed level 1, in milliseconds; floored at MinDisplayMs.</summary>
     public int CruiseBaseMs { get; set; } = 350;
+
+    /// <summary>How much faster each cruise level gets, in percent.</summary>
+    public int CruiseAccelPercent { get; set; } = 25;
+
+    /// <summary>Show characters read and speed when a session ends.</summary>
+    public bool ShowStats { get; set; } = true;
 
     /// <summary>Japanese segments stop merging beyond this many characters.</summary>
     public int MaxSegmentLength { get; set; } = Segmentation.Segmenter.DefaultMaxLength;
@@ -55,6 +61,8 @@ public sealed class Settings
         FontSize = double.IsFinite(FontSize) ? Math.Clamp(FontSize, 12, 200) : 44,
         WheelMode = string.Equals(WheelMode?.Trim(), "step", StringComparison.OrdinalIgnoreCase) ? "step" : "cruise",
         CruiseBaseMs = Math.Clamp(CruiseBaseMs, 100, 3000),
+        CruiseAccelPercent = Math.Clamp(CruiseAccelPercent, 5, 50),
+        ShowStats = ShowStats,
         MaxSegmentLength = Math.Clamp(MaxSegmentLength, 4, 20),
         OrpEnabled = OrpEnabled,
         Segmenter = string.Equals(Segmenter?.Trim(), "os", StringComparison.OrdinalIgnoreCase) ? "os" : "mecab",

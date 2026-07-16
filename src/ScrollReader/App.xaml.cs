@@ -15,6 +15,7 @@ public partial class App : System.Windows.Application
     private bool _middleClickActivation;
     private SettingsStore? _settings;
     private ReadingSession? _session;
+    private ResumeState? _resume;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -162,9 +163,14 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _session = new ReadingSession(settings, _middleClickActivation);
-        _session.Ended += () => _session = null;
-        _session.Start();
+        var session = new ReadingSession(settings, _middleClickActivation, _resume);
+        _session = session;
+        session.Ended += () =>
+        {
+            if (session.SourceText is { } text) _resume = new ResumeState(text, session.LastCharOffset);
+            _session = null;
+        };
+        session.Start();
     }
 
     private static string? GetForegroundProcessName()
