@@ -60,6 +60,9 @@ internal sealed class ReadingSession
     private readonly bool _orpEnabled;
     private readonly string _segmenterEngine;
     private readonly double _lengthWeight;
+    private readonly double _sentencePauseFactor;
+    private readonly double _clausePauseFactor;
+    private readonly int _minSegmentLength;
     private readonly bool _showStats;
     private readonly ResumeState? _resume;
 
@@ -107,6 +110,9 @@ internal sealed class ReadingSession
         _orpEnabled = settings.OrpEnabled;
         _segmenterEngine = settings.Segmenter;
         _lengthWeight = settings.LengthWeight;
+        _sentencePauseFactor = settings.SentencePauseFactor;
+        _clausePauseFactor = settings.ClausePauseFactor;
+        _minSegmentLength = settings.MinSegmentLength;
         _showStats = settings.ShowStats;
         _resume = resume;
     }
@@ -127,15 +133,15 @@ internal sealed class ReadingSession
     /// <summary>
     /// Auto-advance display time mimics reading rhythm: proportional to
     /// segment length (lengthWeight per character around the reference
-    /// length, clamped to 0.6–2.0x), times pause multipliers for sentence
-    /// ends (1.7x) and clause ends (1.35x).
+    /// length, clamped to 0.6–2.0x), times the pause multipliers for
+    /// sentence ends and clause ends.
     /// </summary>
-    internal static double DisplayWeight(string segment, double lengthWeight)
+    internal static double DisplayWeight(string segment, double lengthWeight, double sentenceFactor, double clauseFactor)
     {
         var weight = Math.Clamp(1 + lengthWeight * (segment.Length - ReferenceLength), 0.6, 2.0);
         var last = segment[^1];
-        if (last is '。' or '！' or '？' or '!' or '?' or '…' or '.') weight *= 1.7;
-        else if (last is '、' or ',' or '，') weight *= 1.35;
+        if (last is '。' or '！' or '？' or '!' or '?' or '…' or '.') weight *= sentenceFactor;
+        else if (last is '、' or ',' or '，') weight *= clauseFactor;
         return weight;
     }
 
@@ -165,7 +171,7 @@ internal sealed class ReadingSession
         }
         var segments = text is null
             ? Array.Empty<string>()
-            : Segmenter.Segment(text, _maxSegmentLength, _segmenterEngine);
+            : Segmenter.Segment(text, _maxSegmentLength, _segmenterEngine, _minSegmentLength);
         if (segments.Count == 0)
         {
             new OverlayWindow().ShowTransientMessage("テキストが選択されていません", cursor);
@@ -360,7 +366,8 @@ internal sealed class ReadingSession
     private void ApplyCruiseInterval()
     {
         var baseMs = CruiseIntervalMs(_cruiseBaseMs, _minDisplayTime.TotalMilliseconds, _cruiseLevel, _cruiseAccel);
-        _cruiseTimer!.Interval = TimeSpan.FromMilliseconds(baseMs * DisplayWeight(_segments[_index], _lengthWeight));
+        _cruiseTimer!.Interval = TimeSpan.FromMilliseconds(
+            baseMs * DisplayWeight(_segments[_index], _lengthWeight, _sentencePauseFactor, _clausePauseFactor));
     }
 
     private void StopCruise()

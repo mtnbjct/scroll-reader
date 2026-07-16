@@ -54,22 +54,32 @@ public class CruiseSpeedTests
         Assert.Equal(ReadingSession.CruiseLevelCap, ReadingSession.ComputeMaxCruiseLevel(3000, 1, Accel));
     }
 
+    private static double Weight(string segment, double lengthWeight = 0.05) =>
+        ReadingSession.DisplayWeight(segment, lengthWeight, 1.7, 1.35);
+
     [Fact]
     public void SentenceEndsDwellLongerThanClauseEndsThanPlain()
     {
-        var plain = ReadingSession.DisplayWeight("読んだ", 0.05);
-        var clause = ReadingSession.DisplayWeight("読んで、", 0.05);
-        var sentence = ReadingSession.DisplayWeight("読んだ。", 0.05);
-        Assert.True(plain < clause);
-        Assert.True(clause < sentence);
+        Assert.True(Weight("読んだ") < Weight("読んで、"));
+        Assert.True(Weight("読んで、") < Weight("読んだ。"));
+    }
+
+    [Fact]
+    public void PauseFactorsAreConfigurable()
+    {
+        var strong = ReadingSession.DisplayWeight("読んだ。", 0, 3.0, 1.35);
+        var neutral = ReadingSession.DisplayWeight("読んだ。", 0, 1.0, 1.0);
+        Assert.Equal(3.0, strong, 3);
+        Assert.Equal(1.0, neutral, 3);
+        Assert.Equal(2.0, ReadingSession.DisplayWeight("読んで、", 0, 1.7, 2.0), 3);
     }
 
     [Fact]
     public void DisplayTimeScalesWithLength()
     {
-        var w2 = ReadingSession.DisplayWeight("時に", 0.05);
-        var w4 = ReadingSession.DisplayWeight("親譲りの", 0.05);
-        var w7 = ReadingSession.DisplayWeight("一週間ほど腰を", 0.05);
+        var w2 = Weight("時に");
+        var w4 = Weight("親譲りの");
+        var w7 = Weight("一週間ほど腰を");
         Assert.True(w2 < w4);
         Assert.True(w4 < w7);
         Assert.Equal(1.0, w4); // reference length 4 is neutral
@@ -80,15 +90,13 @@ public class CruiseSpeedTests
     [Fact]
     public void ZeroLengthWeightIsLengthNeutral()
     {
-        Assert.Equal(
-            ReadingSession.DisplayWeight("時に", 0),
-            ReadingSession.DisplayWeight("一週間ほど腰を", 0));
+        Assert.Equal(Weight("時に", 0), Weight("一週間ほど腰を", 0));
     }
 
     [Fact]
     public void LengthFactorIsClamped()
     {
         var veryLong = new string('あ', 60);
-        Assert.Equal(2.0, ReadingSession.DisplayWeight(veryLong, 0.3));
+        Assert.Equal(2.0, Weight(veryLong, 0.3));
     }
 }

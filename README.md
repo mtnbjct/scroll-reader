@@ -42,7 +42,10 @@ Right-click the tray icon → "設定を開く" (open settings), or edit `%AppDa
   "cruiseBaseMs": 350,        // slowest cruise speed (ms per unit)
   "cruiseAccelPercent": 25,   // speed-up per cruise level (5-50)
   "lengthWeight": 0.05,       // cruise time scaling per character (0 = off)
+  "sentencePauseFactor": 1.7, // cruise dwell on sentence ends (。！？…)
+  "clausePauseFactor": 1.35,  // cruise dwell on clause ends (、)
   "maxSegmentLength": 7,      // max characters per Japanese unit
+  "minSegmentLength": 3,      // shorter units merge with a neighbour
   "segmenter": "mecab",       // "mecab" (bundled dic) or "os" (lightweight)
   "minDisplayMs": 120,        // minimum display time = top speed
   "maxPendingSteps": 5,       // wheel input buffer cap

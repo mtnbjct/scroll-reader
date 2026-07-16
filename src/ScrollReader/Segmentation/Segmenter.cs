@@ -9,27 +9,28 @@ namespace ScrollReader.Segmentation;
 public static class Segmenter
 {
     /// <summary>
-    /// Japanese segments aim for MinTargetLength..maxLength characters:
-    /// neighbours merge while one of them is shorter than the minimum, and
-    /// attachment chains stop growing at the maximum. Segments outside the
-    /// range can still occur (long single tokens, pause punctuation) — that
-    /// beats unnatural cuts.
+    /// Japanese segments aim for minLength..maxLength characters: neighbours
+    /// merge while one of them is shorter than the minimum, and attachment
+    /// chains stop growing at the maximum. Segments outside the range can
+    /// still occur (long single tokens, pause punctuation) — that beats
+    /// unnatural cuts.
     /// </summary>
-    private const int MinTargetLength = 3;
-
     public const int DefaultMaxLength = 7;
+
+    public const int DefaultMinLength = 3;
 
     private static readonly Lazy<IJapaneseTokenizer?> MeCab = new(MeCabTokenizer.TryCreate);
     private static readonly Lazy<IJapaneseTokenizer> Os = new(() => new OsTokenizer());
 
-    public static IReadOnlyList<string> Segment(string text, int maxLength = DefaultMaxLength, string engine = "mecab")
+    public static IReadOnlyList<string> Segment(
+        string text, int maxLength = DefaultMaxLength, string engine = "mecab", int minLength = DefaultMinLength)
     {
         text = text.Replace("\r\n", "\n").Trim();
         if (text.Length == 0) return Array.Empty<string>();
         if (!ContainsJapanese(text)) return SegmentByWhitespace(text);
 
         var tokenizer = engine == "os" ? Os.Value : MeCab.Value ?? Os.Value;
-        return SegmentJapanese(text, maxLength, tokenizer);
+        return SegmentJapanese(text, maxLength, minLength, tokenizer);
     }
 
     public static bool ContainsJapanese(string text) => text.Any(IsJapaneseChar);
@@ -44,7 +45,7 @@ public static class Segmenter
     private static IReadOnlyList<string> SegmentByWhitespace(string text) =>
         text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
-    private static IReadOnlyList<string> SegmentJapanese(string text, int maxLength, IJapaneseTokenizer tokenizer)
+    private static IReadOnlyList<string> SegmentJapanese(string text, int maxLength, int minLength, IJapaneseTokenizer tokenizer)
     {
         var segments = new List<string>();
         var hardBreakBefore = new List<bool>();
@@ -93,15 +94,15 @@ public static class Segmenter
             if (segments.Count > 0) segments[^1] += pendingPrefix;
             else AddSegment("", false);
         }
-        return BalanceLengths(segments, hardBreakBefore, maxLength);
+        return BalanceLengths(segments, hardBreakBefore, maxLength, minLength);
     }
 
     /// <summary>
     /// Second pass: pulls too-short bunsetsu together so most segments land
-    /// in the 3..maxLength character sweet spot. Never merges across
+    /// in the minLength..maxLength character sweet spot. Never merges across
     /// whitespace, newlines, or pause punctuation (。、！？…).
     /// </summary>
-    private static List<string> BalanceLengths(List<string> segments, List<bool> hardBreakBefore, int maxLength)
+    private static List<string> BalanceLengths(List<string> segments, List<bool> hardBreakBefore, int maxLength, int minLength)
     {
         var result = new List<string>();
         for (var i = 0; i < segments.Count; i++)
@@ -111,7 +112,7 @@ public static class Segmenter
             var mergeable = result.Count > 0
                 && !hardBreakBefore[i]
                 && !EndsWithPause(result[^1])
-                && (result[^1].Length < MinTargetLength || current.Length < MinTargetLength)
+                && (result[^1].Length < minLength || current.Length < minLength)
                 && result[^1].Length + current.Length <= maxLength;
 
             if (mergeable) result[^1] += current;

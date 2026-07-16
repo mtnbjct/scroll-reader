@@ -27,8 +27,17 @@ public sealed class Settings
     /// <summary>Show characters read and speed when a session ends.</summary>
     public bool ShowStats { get; set; } = true;
 
+    /// <summary>Cruise dwell multiplier for units ending a sentence (。！？…).</summary>
+    public double SentencePauseFactor { get; set; } = 1.7;
+
+    /// <summary>Cruise dwell multiplier for units ending a clause (、,).</summary>
+    public double ClausePauseFactor { get; set; } = 1.35;
+
     /// <summary>Japanese segments stop merging beyond this many characters.</summary>
     public int MaxSegmentLength { get; set; } = Segmentation.Segmenter.DefaultMaxLength;
+
+    /// <summary>Japanese segments shorter than this try to merge with a neighbour.</summary>
+    public int MinSegmentLength { get; set; } = Segmentation.Segmenter.DefaultMinLength;
 
     /// <summary>Highlight and align the optimal recognition point for non-Japanese text.</summary>
     public bool OrpEnabled { get; set; } = true;
@@ -53,25 +62,32 @@ public sealed class Settings
     public static Settings Load(string json) =>
         (JsonSerializer.Deserialize<Settings>(json, JsonOptions) ?? new Settings()).Sanitized();
 
-    public Settings Sanitized() => new()
+    public Settings Sanitized()
     {
-        Hotkey = string.IsNullOrWhiteSpace(Hotkey) ? "Ctrl+Alt+R" : Hotkey.Trim(),
-        MinDisplayMs = Math.Clamp(MinDisplayMs, 30, 2000),
-        MaxPendingSteps = Math.Clamp(MaxPendingSteps, 1, 50),
-        FontSize = double.IsFinite(FontSize) ? Math.Clamp(FontSize, 12, 200) : 44,
-        WheelMode = string.Equals(WheelMode?.Trim(), "step", StringComparison.OrdinalIgnoreCase) ? "step" : "cruise",
-        CruiseBaseMs = Math.Clamp(CruiseBaseMs, 100, 3000),
-        CruiseAccelPercent = Math.Clamp(CruiseAccelPercent, 5, 50),
-        ShowStats = ShowStats,
-        MaxSegmentLength = Math.Clamp(MaxSegmentLength, 4, 20),
-        OrpEnabled = OrpEnabled,
-        Segmenter = string.Equals(Segmenter?.Trim(), "os", StringComparison.OrdinalIgnoreCase) ? "os" : "mecab",
-        LengthWeight = double.IsFinite(LengthWeight) ? Math.Clamp(LengthWeight, 0, 0.3) : 0.05,
-        BlockedProcesses = (BlockedProcesses ?? Array.Empty<string>())
-            .Where(p => !string.IsNullOrWhiteSpace(p))
-            .Select(p => p.Trim())
-            .ToArray(),
-    };
+        var maxSegment = Math.Clamp(MaxSegmentLength, 4, 20);
+        return new()
+        {
+            Hotkey = string.IsNullOrWhiteSpace(Hotkey) ? "Ctrl+Alt+R" : Hotkey.Trim(),
+            MinDisplayMs = Math.Clamp(MinDisplayMs, 30, 2000),
+            MaxPendingSteps = Math.Clamp(MaxPendingSteps, 1, 50),
+            FontSize = double.IsFinite(FontSize) ? Math.Clamp(FontSize, 12, 200) : 44,
+            WheelMode = string.Equals(WheelMode?.Trim(), "step", StringComparison.OrdinalIgnoreCase) ? "step" : "cruise",
+            CruiseBaseMs = Math.Clamp(CruiseBaseMs, 100, 3000),
+            CruiseAccelPercent = Math.Clamp(CruiseAccelPercent, 5, 50),
+            ShowStats = ShowStats,
+            SentencePauseFactor = double.IsFinite(SentencePauseFactor) ? Math.Clamp(SentencePauseFactor, 1.0, 4.0) : 1.7,
+            ClausePauseFactor = double.IsFinite(ClausePauseFactor) ? Math.Clamp(ClausePauseFactor, 1.0, 4.0) : 1.35,
+            MaxSegmentLength = maxSegment,
+            MinSegmentLength = Math.Clamp(MinSegmentLength, 1, Math.Min(8, maxSegment)),
+            OrpEnabled = OrpEnabled,
+            Segmenter = string.Equals(Segmenter?.Trim(), "os", StringComparison.OrdinalIgnoreCase) ? "os" : "mecab",
+            LengthWeight = double.IsFinite(LengthWeight) ? Math.Clamp(LengthWeight, 0, 0.3) : 0.05,
+            BlockedProcesses = (BlockedProcesses ?? Array.Empty<string>())
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => p.Trim())
+                .ToArray(),
+        };
+    }
 
     public bool IsBlocked(string processName) =>
         BlockedProcesses.Any(p =>

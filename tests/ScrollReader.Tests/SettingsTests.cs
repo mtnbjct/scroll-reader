@@ -66,6 +66,9 @@ public class SettingsTests
         Assert.Equal(350, s.CruiseBaseMs);
         Assert.Equal(25, s.CruiseAccelPercent);
         Assert.True(s.ShowStats);
+        Assert.Equal(1.7, s.SentencePauseFactor);
+        Assert.Equal(1.35, s.ClausePauseFactor);
+        Assert.Equal(3, s.MinSegmentLength);
         Assert.Equal(7, s.MaxSegmentLength);
         Assert.True(s.OrpEnabled);
         Assert.Equal("mecab", s.Segmenter);
@@ -94,6 +97,22 @@ public class SettingsTests
     {
         Assert.Equal(5, new Settings { CruiseAccelPercent = 0 }.Sanitized().CruiseAccelPercent);
         Assert.Equal(50, new Settings { CruiseAccelPercent = 90 }.Sanitized().CruiseAccelPercent);
+    }
+
+    [Fact]
+    public void PauseFactorsAreClamped()
+    {
+        Assert.Equal(1.0, new Settings { SentencePauseFactor = 0.2 }.Sanitized().SentencePauseFactor);
+        Assert.Equal(4.0, new Settings { ClausePauseFactor = 99 }.Sanitized().ClausePauseFactor);
+        Assert.Equal(1.7, new Settings { SentencePauseFactor = double.NaN }.Sanitized().SentencePauseFactor);
+    }
+
+    [Fact]
+    public void MinSegmentLengthIsClampedAndCannotExceedMax()
+    {
+        Assert.Equal(1, new Settings { MinSegmentLength = 0 }.Sanitized().MinSegmentLength);
+        Assert.Equal(8, new Settings { MinSegmentLength = 99, MaxSegmentLength = 20 }.Sanitized().MinSegmentLength);
+        Assert.Equal(5, new Settings { MinSegmentLength = 99, MaxSegmentLength = 5 }.Sanitized().MinSegmentLength);
     }
 
     [Theory]

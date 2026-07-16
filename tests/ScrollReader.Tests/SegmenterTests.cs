@@ -52,6 +52,16 @@ public class SegmenterTests
     }
 
     [Fact]
+    public void MinSegmentLengthOneDisablesBalancing()
+    {
+        const string text = "私は本を読んだ。";
+        var merged = Segmenter.Segment(text, minLength: 3);
+        var unmerged = Segmenter.Segment(text, minLength: 1);
+        Assert.Equal(text, string.Concat(unmerged));
+        Assert.True(unmerged.Count > merged.Count, $"{unmerged.Count} vs {merged.Count}");
+    }
+
+    [Fact]
     public void MaxSegmentLengthIsAdjustable()
     {
         const string text = "視線を移動させずに読書速度を高める。";
