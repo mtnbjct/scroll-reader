@@ -40,11 +40,6 @@ internal sealed class SettingsStore : IDisposable
         {
             "クルーズで1段加速するごとに何%速くなるか（5〜50）",
         }),
-        ("maxCruiseLevel", "0", new[]
-        {
-            "クルーズの最大速度レベル。0 = 自動（minDisplayMs に到達する段数まで）、手動なら 1〜30。",
-            "手動で増やしても1文節あたりの時間は minDisplayMs より速くならない（速くしたいなら minDisplayMs を下げる）",
-        }),
         ("lengthWeight", "0.05", new[]
         {
             "文字数に応じた表示時間の増減（1文字あたりの割合）。",

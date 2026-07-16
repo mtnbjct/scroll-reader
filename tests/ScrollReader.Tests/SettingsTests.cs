@@ -96,15 +96,6 @@ public class SettingsTests
         Assert.Equal(50, new Settings { CruiseAccelPercent = 90 }.Sanitized().CruiseAccelPercent);
     }
 
-    [Fact]
-    public void MaxCruiseLevelZeroMeansAutoAndIsClamped()
-    {
-        Assert.Equal(0, new Settings { MaxCruiseLevel = 0 }.Sanitized().MaxCruiseLevel);
-        Assert.Equal(0, new Settings { MaxCruiseLevel = -3 }.Sanitized().MaxCruiseLevel);
-        Assert.Equal(8, new Settings { MaxCruiseLevel = 8 }.Sanitized().MaxCruiseLevel);
-        Assert.Equal(30, new Settings { MaxCruiseLevel = 99 }.Sanitized().MaxCruiseLevel);
-    }
-
     [Theory]
     [InlineData("step", "step")]
     [InlineData("STEP", "step")]

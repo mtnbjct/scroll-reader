@@ -41,7 +41,6 @@ Right-click the tray icon → "設定を開く" (open settings), or edit `%AppDa
   "wheelMode": "cruise",      // "cruise" or "step"
   "cruiseBaseMs": 350,        // slowest cruise speed (ms per unit)
   "cruiseAccelPercent": 25,   // speed-up per cruise level (5-50)
-  "maxCruiseLevel": 0,        // max cruise level; 0 = auto
   "lengthWeight": 0.05,       // cruise time scaling per character (0 = off)
   "maxSegmentLength": 7,      // max characters per Japanese unit
   "segmenter": "mecab",       // "mecab" (bundled dic) or "os" (lightweight)
