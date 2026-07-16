@@ -125,14 +125,25 @@ internal sealed class SettingsStore : IDisposable
             Reload(raiseChanged: true);
         };
 
-        _watcher = new FileSystemWatcher(dir, Path.GetFileName(FilePath))
+        try
         {
-            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
-            EnableRaisingEvents = true,
-        };
-        _watcher.Changed += OnFileEvent;
-        _watcher.Created += OnFileEvent;
-        _watcher.Renamed += OnFileEvent;
+            _watcher = new FileSystemWatcher(dir, Path.GetFileName(FilePath))
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+            };
+            _watcher.Changed += OnFileEvent;
+            _watcher.Created += OnFileEvent;
+            _watcher.Renamed += OnFileEvent;
+            _watcher.EnableRaisingEvents = true;
+        }
+        catch (Exception)
+        {
+            // Watching can fail on exotic setups (e.g. the folder reached
+            // through filesystem virtualization + junctions). Degrade to
+            // no hot reload instead of crashing; settings still load.
+            _watcher?.Dispose();
+            _watcher = null;
+        }
     }
 
     internal static string BuildTemplate()
