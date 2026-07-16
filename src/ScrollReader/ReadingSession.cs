@@ -101,7 +101,9 @@ internal sealed class ReadingSession
         _cruiseMode = settings.WheelMode != "step";
         _cruiseBaseMs = settings.CruiseBaseMs;
         _cruiseAccel = 1 - settings.CruiseAccelPercent / 100.0;
-        _maxCruiseLevel = ComputeMaxCruiseLevel(_cruiseBaseMs, settings.MinDisplayMs, _cruiseAccel);
+        _maxCruiseLevel = settings.MaxCruiseLevel > 0
+            ? settings.MaxCruiseLevel
+            : ComputeMaxCruiseLevel(_cruiseBaseMs, settings.MinDisplayMs, _cruiseAccel);
         _abortOnMiddleClick = !middleClickActivation;
         _maxSegmentLength = settings.MaxSegmentLength;
         _orpEnabled = settings.OrpEnabled;

@@ -24,6 +24,9 @@ public sealed class Settings
     /// <summary>How much faster each cruise level gets, in percent.</summary>
     public int CruiseAccelPercent { get; set; } = 25;
 
+    /// <summary>Maximum cruise speed level; 0 = automatic (levels until MinDisplayMs is reached).</summary>
+    public int MaxCruiseLevel { get; set; } = 0;
+
     /// <summary>Show characters read and speed when a session ends.</summary>
     public bool ShowStats { get; set; } = true;
 
@@ -62,6 +65,7 @@ public sealed class Settings
         WheelMode = string.Equals(WheelMode?.Trim(), "step", StringComparison.OrdinalIgnoreCase) ? "step" : "cruise",
         CruiseBaseMs = Math.Clamp(CruiseBaseMs, 100, 3000),
         CruiseAccelPercent = Math.Clamp(CruiseAccelPercent, 5, 50),
+        MaxCruiseLevel = MaxCruiseLevel <= 0 ? 0 : Math.Clamp(MaxCruiseLevel, 1, 30),
         ShowStats = ShowStats,
         MaxSegmentLength = Math.Clamp(MaxSegmentLength, 4, 20),
         OrpEnabled = OrpEnabled,
