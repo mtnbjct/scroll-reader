@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows.Automation;
 using ScrollReader.Native;
 
@@ -15,8 +16,24 @@ internal static class TextCapture
     {
         var text = TryUiAutomation();
         if (string.IsNullOrWhiteSpace(text)) text = TryClipboard();
-        return string.IsNullOrWhiteSpace(text) ? null : text;
+        return string.IsNullOrWhiteSpace(text) ? null : StripKindleAttribution(text);
     }
+
+    /// <summary>
+    /// Kindle appends a citation line to copied text（"著者. 書名 (Kindle の
+    /// 位置No.123-125). 出版社. Kindle 版." / "... Kindle Edition."）. The
+    /// copy itself happened within Kindle's rules; removing the boilerplate
+    /// from what we display is purely cosmetic.
+    /// </summary>
+    internal static string StripKindleAttribution(string text)
+    {
+        var stripped = KindleAttribution.Replace(text, "");
+        return string.IsNullOrWhiteSpace(stripped) ? text : stripped;
+    }
+
+    private static readonly Regex KindleAttribution = new(
+        @"(?:\r?\n\s*)+(?:[^\r\n]*\(Kindle\s?(?:の位置No|Locations?)[^\r\n]*|[^\r\n]*Kindle\s?(?:版|Edition)\.?)\s*$",
+        RegexOptions.Compiled);
 
     private static string? TryUiAutomation()
     {
